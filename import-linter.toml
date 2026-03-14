@@ -1,0 +1,115 @@
+# import-linter.toml
+#
+# Run with:
+#   lint-imports --config import-linter.toml
+#
+[tool.importlinter]
+  root_package              = "scohthwang"
+  include_external_packages = false
+
+# -----------------------------------------------------------------------------
+# 1) Global layered architecture (current packages only)
+# -----------------------------------------------------------------------------
+# "layers" is top -> bottom. A layer may import the same layer and lower layers only.
+[[importlinter.contracts]]
+  name = "enforce package layering"
+  type = "layers"
+  layers = [
+    "scohthwang.cli",
+    "scohthwang.app",
+    "scohthwang.api",
+    "scohthwang.support",
+    "scohthwang.rules",
+    "scohthwang.domain | scohthwang.resources",
+  ]
+
+
+# -----------------------------------------------------------------------------
+# 2) Domain must be independent (most important stability boundary)
+# -----------------------------------------------------------------------------
+[[importlinter.contracts]]
+  name = "domain is independent"
+  type = "independence"
+  modules = [
+    "scohthwang.domain",
+  ]
+
+# -----------------------------------------------------------------------------
+# 3) CLI must not reach into implementation internals directly
+# -----------------------------------------------------------------------------
+[[importlinter.contracts]]
+  name              = "cli does not import api directly"
+  type              = "forbidden"
+  source_modules    = ["scohthwang.cli"]
+  forbidden_modules = ["scohthwang.api"]
+
+# -----------------------------------------------------------------------------
+# 4) Public API should not depend on CLI/App
+# -----------------------------------------------------------------------------
+[[importlinter.contracts]]
+  name = "api isolated from cli app"
+  type = "forbidden"
+  source_modules = ["scohthwang.api"]
+  forbidden_modules = [
+    "scohthwang.cli",
+    "scohthwang.app",
+  ]
+
+# -----------------------------------------------------------------------------
+# 5) Support helpers are low-level helpers, not feature orchestrators
+# -----------------------------------------------------------------------------
+[[importlinter.contracts]]
+  name = "support does not depend on cli app api"
+  type = "forbidden"
+  source_modules = ["scohthwang.support"]
+  forbidden_modules = [
+    "scohthwang.cli",
+    "scohthwang.app",
+    "scohthwang.api",
+  ]
+
+# -----------------------------------------------------------------------------
+# 6) CLI submodule cohesion (optional but useful)
+# -----------------------------------------------------------------------------
+# Keep CLI parser/resolve/context logic local; avoid accidental imports from commands into nvim.
+[[importlinter.contracts]]
+  name = "cli resolver stays out of app api"
+  type = "forbidden"
+  source_modules = [
+    "scohthwang.cli.resolve",
+    "scohthwang.cli.params",
+    "scohthwang.cli.context",
+  ]
+  forbidden_modules = [
+    "scohthwang.app",
+    "scohthwang.api",
+  ]
+
+# -----------------------------------------------------------------------------
+# 7) No cross-feature top-level shortcuts once refactor is complete
+# -----------------------------------------------------------------------------
+# Prevent reintroducing "grab bag" modules.
+[[importlinter.contracts]]
+  name = "legacy top-level internal modules are not imported"
+  type = "forbidden"
+  source_modules = [
+    "scohthwang.cli",
+    "scohthwang.app",
+    "scohthwang.api",
+    "scohthwang.rules",
+    "scohthwang.support",
+    "scohthwang.domain",
+    "scohthwang.resources",
+  ]
+  forbidden_modules = [
+    "scohthwang.core",
+    "scohthwang.screen",
+    "scohthwang.types",
+    "scohthwang.utils",
+  ]
+
+# -----------------------------------------------------------------------------
+# Future packages (planned, not currently present)
+# -----------------------------------------------------------------------------
+# Keep prospective nvim/plugins contracts here as commented stubs until those
+# packages are introduced to avoid inflating the active architecture surface.
