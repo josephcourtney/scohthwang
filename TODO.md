@@ -1,13 +1,6 @@
 # TODO
 
-## Phase 1 — Core models (`src/scohthwang/models.py`)
-
-- [ ] Define `LARGE_COST: float = 1e9` sentinel constant with docstring
-- [ ] Define `CostMatrix = list[list[float]]` type alias; document sentinel convention
-- [ ] Define `AlignedPair = tuple[int | None, int | None]` type alias
-- [ ] Define `MatchResult` frozen dataclass: `pairs: list[tuple[int, int]]`, `unmatched_left: list[int]`, `unmatched_right: list[int]`, `total_cost: float`
-- [ ] Define `OffsetInferenceResult` frozen dataclass: `offset: int | None`, `agreement: float`, `compared: int`, `ambiguous: bool`
-- [ ] Write `tests/unit/test_models.py`: construction, field types, frozen immutability
+## ~~Phase 1 — Core models (`src/scohthwang/models.py`)~~ ✓ complete
 
 ## Phase 2 — Assignment (`src/scohthwang/assign.py`)
 

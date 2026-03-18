@@ -2,23 +2,21 @@
 
 ## Current focus
 
-Project scope and architecture have just been defined. The immediate work is Phase 1 of PLAN.md: define core models in `models.py` and write the first unit tests, establishing the baseline structure that all subsequent modules depend on.
+Phase 1 complete. Next: Phase 2 (`assign.py`, Hungarian algorithm) and Phase 3 (`align.py`, Needleman-Wunsch) — independent, may proceed in parallel.
 
 ## Current state summary
 
 - Version `0.0.0`, alpha.
-- All source modules (`models.py`, `canonicalize.py`, `block.py`, `score.py`, `align.py`, `match.py`, `assign.py`) are empty stubs.
-- No tests exist beyond conftest scaffolding and `tests/__init__.py`.
-- Tooling (ruff, ty, pytest, uv) is fully configured and functional.
-- DESIGN.md, PLAN.md, TODO.md, and README.md have been written and reflect the current intended design.
-- Algorithm designs are informed by working implementations in `bvp/packages/bvp-cs/src/bvp_cs/algorithms/`; that code is the primary reference for Phases 2–7.
+- `models.py` implemented and fully tested (16 unit tests, all passing).
+- Remaining source modules (`canonicalize.py`, `block.py`, `score.py`, `align.py`, `match.py`, `assign.py`) are empty stubs.
+- Tooling (ruff, ty, pytest, uv) fully configured and functional.
+- DESIGN.md, PLAN.md, TODO.md, and README.md reflect the current intended design.
 
 ## Known gaps and risks
 
-- **`docs/adr/README.md` is stale**: it indexes six ADRs that belong to a different project. No actual ADR files exist. The index should be cleared and rebuilt when architectural decisions are made.
-- **No public API**: `__init__.py` is empty; nothing is importable yet.
-- **No tests**: coverage baseline is zero; Phase 1 will establish it.
-- **bvp-cs is not a declared dependency**: the reference implementations live in `bvp/packages/bvp-cs`, which is not importable from this package. Code must be transcribed and generalized by hand, not imported.
+- **`docs/adr/README.md` is stale**: indexes six ADRs from a different project; no actual ADR files exist. Clear and rebuild when architectural decisions are made.
+- **No public API yet**: `__init__.py` is empty; deferred to Phase 7 per PLAN.md.
+- **bvp-cs is not a declared dependency**: reference implementations in `bvp/packages/bvp-cs` must be transcribed and generalized by hand, not imported.
 
 ## Continuity notes
 
