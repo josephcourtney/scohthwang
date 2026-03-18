@@ -2,13 +2,14 @@
 
 ## Current focus
 
-Phase 1 complete. Next: Phase 2 (`assign.py`, Hungarian algorithm) and Phase 3 (`align.py`, Needleman-Wunsch) — independent, may proceed in parallel.
+Phase 2 complete. Next: Phase 3 (`align.py`, Needleman-Wunsch + offset inference).
 
 ## Current state summary
 
 - Version `0.0.0`, alpha.
-- `models.py` implemented and fully tested (16 unit tests, all passing).
-- Remaining source modules (`canonicalize.py`, `block.py`, `score.py`, `align.py`, `match.py`, `assign.py`) are empty stubs.
+- `models.py` implemented and fully tested (16 unit tests).
+- `assign.py` implemented and fully tested (22 unit tests); bvp-cs migration notes written.
+- Remaining source modules (`canonicalize.py`, `block.py`, `score.py`, `align.py`, `match.py`) are empty stubs.
 - Tooling (ruff, ty, pytest, uv) fully configured and functional.
 - DESIGN.md, PLAN.md, TODO.md, and README.md reflect the current intended design.
 

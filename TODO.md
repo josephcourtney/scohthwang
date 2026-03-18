@@ -2,24 +2,7 @@
 
 ## ~~Phase 1 — Core models (`src/scohthwang/models.py`)~~ ✓ complete
 
-## Phase 2 — Assignment (`src/scohthwang/assign.py`)
-
-Reference: `bvp/packages/bvp-cs/src/bvp_cs/algorithms/hungarian.py`
-
-- [ ] Implement `hungarian_square(cost: CostMatrix) -> list[int]`
-  - Kuhn-Munkres shortest-augmenting-path; input must be square and non-empty
-  - Raise `ValueError` if non-square or empty
-  - Document tie-breaking rule (prefer diagonal on equal cost)
-- [ ] Implement `hungarian_with_unmatched(cost: CostMatrix, unmatched_cost: float) -> tuple[list[int | None], float]`
-  - Empty cost (0 rows or 0 columns) → return `([], 0.0)`
-  - Pad to square with `unmatched_cost`; call `hungarian_square`; strip dummy assignments
-  - Return `(match_for_left, total_cost)`
-- [ ] Write `tests/unit/test_assign.py`:
-  - 1×1, 2×2, 3×3 square cases with known optimal solutions
-  - Rectangular (more left than right, and vice versa)
-  - All elements better off unmatched (all costs > unmatched_cost)
-  - Empty inputs (0×0, 0×n, n×0)
-  - Symmetry: transposing cost matrix produces consistent pairing
+## ~~Phase 2 — Assignment (`src/scohthwang/assign.py`)~~ ✓ complete
 
 ## Phase 3 — Sequence alignment (`src/scohthwang/align.py`)
 
