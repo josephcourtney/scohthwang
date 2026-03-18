@@ -1,186 +1,102 @@
 # scohthwang
 
-`scohthwang` is a Python library for building local mirrors of remote data.
+`scohthwang` is a Python library of composable algorithms for finding correspondences between elements of two sets, sequences, or containers.
 
-It is designed for projects that need to pull data from a mix of upstream sources, keep the results on disk in a stable layout, and record enough metadata to inspect what was fetched, when it was fetched, and where the materialized artifacts live.
+It provides the building blocks — sequence alignment, optimal assignment, scoring, blocking, and canonicalization — needed to construct custom matching pipelines. Algorithms are designed to compose: the score for matching two container elements can itself be computed by running an inner matching algorithm on their contents, enabling hierarchical, multi-level correspondence finding.
+
+## Name
+
+**scohthwang** *n.*
+From Old English scōhþwang meaning “shoe-thong” or “shoelace”, which matches up and binds together the two sides.
 
 ## What It Does
 
-`scohthwang` syncs external sources into a single local root and keeps a small set of machine-readable records alongside the fetched data.
+`scohthwang` provides:
 
-Current source patterns:
+- **Sequence alignment** — global (Needleman-Wunsch) alignment and integer-offset inference between indexed sequences
+- **Optimal assignment** — Hungarian algorithm for minimum-cost bipartite matching, with support for leaving elements unmatched
+- **Scoring infrastructure** — configurable, weighted cost functions with hard constraints and soft penalties
+- **Blocking** — candidate-pair generation strategies to reduce the O(n²) comparison space
+- **Matching** — composable pipelines for pairing elements at one or more levels of hierarchy
+- **Canonicalization** — normalization utilities for bringing heterogeneous records into a stable comparable form
 
-- `HTTP` and `REST` sources fetched into local files
-- `RSYNC` sources mirrored into local directories
-- derived `REST_BASE` fanout tasks that expand one API surface into many per-item files
+## Design Principle: Hierarchical Composability
 
-It also maintains:
+The key property of `scohthwang` is that its algorithms compose across levels of structure. A "score" between two elements can be computed by running an inner correspondence algorithm on their sub-elements. For example:
 
-- a canonical merged sync manifest
-- timestamped per-run manifests
-- a mirror-state file with a hash tree for mirrored directories
-- persistent HTTP cache and rate-limit state
-- query and status helpers for downstream tooling
+```
+compare(document_A, document_B)
+  → score each section pair by running align(paragraphs_A, paragraphs_B)
+      → score each paragraph pair by running match(sentences_A, sentences_B)
+```
 
-## Use Cases
+This pattern appears in many domains: comparing biological sequences at the residue level using atom-level matching as the residue similarity score; comparing structured records whose fields are themselves sequences; matching hierarchical taxonomies or nested data.
 
-`scohthwang` is a good fit when you want a reproducible local cache of upstream data instead of issuing ad hoc network requests throughout an application or pipeline.
+## Algorithms
 
-Typical use cases:
+### Sequence Alignment (`align`)
 
-- build a local mirror of reference datasets used by analysis or ETL jobs
-- combine `rsync` mirrors and HTTP API fetches under one managed cache root
-- materialize remote API resources into stable on-disk files for offline or repeatable processing
-- expose sync status, health, and manifest metadata to other automation or observability tools
-- maintain derived per-item artifacts from a base API endpoint
+**Needleman-Wunsch global alignment** — standard dynamic-programming global alignment with configurable match, mismatch, and gap scores. Returns aligned index pairs and total score. Deterministic tie-breaking.
 
-It is not a generic file-sync desktop app. The current implementation is library-first and oriented toward embedding in Python workflows.
+**Offset-scan inference** — infer an integer offset Δ such that `right_index + Δ ≈ left_index` for a pair of indexed sequences. Robust to small sequence differences; reports ambiguity when multiple offsets score similarly.
 
-## Current Scope
+### Assignment (`assign`)
 
-The repository is still in alpha. The public surface today is centered on Python APIs such as:
+**Hungarian algorithm** — solve the minimum-cost bipartite assignment problem. Supports rectangular cost matrices (different numbers of elements on each side) and unmatched elements via a configurable unmatched cost that is compared against the best available match cost.
 
-- `scohthwang.sync()` to perform a sync run
-- `EngineConfig` and `SourceDefinition` to describe the mirror root and upstream sources
-- `query_target()`, `root_payload()`, `store_payload()`, and `source_payload()` to inspect cached artifacts
-- `collect_status_payload()` and `build_summary()` to summarize sync outcomes
-- `RestBaseFanoutTask` for derived fanout materialization
+### Scoring (`score`)
 
-`pyproject.toml` currently declares an `scohthwang` console script, but the repository does not yet contain a documented CLI entrypoint. The stable thing to rely on today is the Python API.
+**Pair cost functions** — compute the cost of matching two elements. Hard constraints (incompatible elements receive a large sentinel cost) and soft penalties (difference in values, label mismatch, position difference) are combined with configurable weights.
 
-## Core Concepts
+**Score composition** — a pair cost function can call a nested matching algorithm and return the optimal assignment cost as the score, enabling hierarchical matching.
 
-### Engine Root
+### Blocking (`block`)
 
-Each sync run writes into one configured root directory. Under that root, `scohthwang` uses conventional subdirectories for:
+**Candidate-pair generation** — strategies for restricting which pairs are evaluated, including label equality, range overlap, and custom predicate blocking. Blocking is conservative: no true match is excluded.
 
-- `http/` for HTTP and REST artifacts
-- `mirrors/` for `rsync` mirrors
-- `cache/http_cache/` for persistent HTTP cache state
-- `rate_limits/` for rate-limit and retry state
-- `log/` for sync manifests
-- `mirror-state.json` for filesystem hash-tree state
+### Matching (`match`)
 
-### Sources
+**Hierarchical matching** — group elements by a key (e.g., sequence position and label), then match within each group. Operates across one or more levels of nesting.
 
-Each upstream is modeled as a `SourceDefinition` with:
+**Strict and flexible modes** — strict mode requires key equality before matching; a reconciliation fallback uses cost-guided pairing when strict matching fails or yields poor results.
 
-- a stable `id`
-- a human-readable `description`
-- a `url`
-- a `SourceKind`
+### Canonicalization (`canonicalize`)
 
-`RSYNC` sources can also specify:
-
-- `local_subpath`
-- `mirror_mode`
-- `mirror_paths`
-
-### Manifest
-
-Every run produces a manifest with:
-
-- run timestamps
-- effective sync configuration
-- per-source HTTP results
-- per-source `rsync` results
-- derived task results
-- run-level errors
-
-The canonical manifest is merged across runs so targeted syncs do not discard older source results for untouched sources.
-
-### Derived Tasks
-
-Derived tasks run after transport sync phases and can materialize additional artifacts based on the fetched data. The built-in `RestBaseFanoutTask` supports enumerating item identifiers and writing each fetched response into a bucketed file layout.
+**Record normalization** — convert raw elements into a stable canonical form before comparison. Supports fallback chains (use primary field if present, otherwise an authoritative alternative).
 
 ## Example
 
-The example below shows the current library-oriented usage pattern.
-
 ```python
-from pathlib import Path
-import asyncio
+from scohthwang.assign import hungarian_with_unmatched
+from scohthwang.align import needleman_wunsch_alignment
 
-from scohthwang import EngineConfig, SourceDefinition, SourceKind, sync
+# Minimum-cost bipartite assignment
+costs = [
+    [1.0, 3.0, 2.0],
+    [2.0, 1.0, 4.0],
+    [3.0, 2.0, 1.0],
+]
+match_for_left, total_cost = hungarian_with_unmatched(costs, unmatched_cost=5.0)
+# match_for_left → [0, 1, 2], total_cost → 3.0
 
-
-async def main() -> None:
-    cfg = EngineConfig(
-        root=Path("./mirror-root"),
-        sources=[
-            SourceDefinition(
-                id="example-json",
-                description="Example JSON payload",
-                url="https://example.test/data.json",
-                kind=SourceKind.HTTP,
-            ),
-            SourceDefinition(
-                id="example-rsync",
-                description="Example rsync mirror",
-                url="rsync.example.test::module",
-                kind=SourceKind.RSYNC,
-                local_subpath="reference/module",
-            ),
-        ],
-    )
-
-    result = await sync(cfg)
-    print(result.ok)
-    print(result.manifest_path)
-
-
-asyncio.run(main())
-```
-
-After a successful run, downstream code can inspect the cached state without re-fetching upstream data.
-
-```python
-from pathlib import Path
-
-from scohthwang import EngineConfig, SourceDefinition, SourceKind, query_target
-
-cfg = EngineConfig(
-    root=Path("./mirror-root"),
-    sources=[
-        SourceDefinition(
-            id="example-json",
-            description="Example JSON payload",
-            url="https://example.test/data.json",
-            kind=SourceKind.HTTP,
-        )
-    ],
+# Global sequence alignment
+left  = ["A", "B", "C", "D"]
+right = ["A", "C", "D"]
+pairs, score = needleman_wunsch_alignment(
+    left, right, match_score=2.0, mismatch_score=-1.0, gap_score=-2.0
 )
-
-payload = query_target("source:example-json", cfg=cfg)
-print(payload["local_path"])
+# pairs → [(0, 0), (1, None), (2, 1), (3, 2)], score → 4.0
 ```
-
-## Query and Status Helpers
-
-The query helpers treat the mirror root as a small inspectable data store.
-
-Supported target shapes include:
-
-- `root`
-- `source:<source-id>`
-- `store:sync_manifest`
-- `store:mirror_state`
-- `index:<index-id>`
-- `source:<source-id>#/json/pointer`
-
-These return structured payloads suitable for programmatic inspection rather than human-formatted terminal output.
 
 ## Installation
 
-This project uses `uv` for dependency management in development.
-
-To work on the repository locally:
+This project uses `uv` for dependency management.
 
 ```bash
 uv sync
 ```
 
-To run the validation commands used by the project:
+To run the validation suite:
 
 ```bash
 .venv/bin/ruff check src/ tests/
@@ -191,13 +107,4 @@ To run the validation commands used by the project:
 
 ## Project Status
 
-The implementation is ahead of the written docs. Several repository documents are still placeholders, so the most accurate description of current behavior is in the source and tests.
-
-For the most relevant code paths, start with:
-
-- `src/scohthwang/sync.py`
-- `src/scohthwang/query.py`
-- `src/scohthwang/status.py`
-- `src/scohthwang/fanout.py`
-- `tests/unit/test_fanout_and_sync.py`
-- `tests/unit/test_summary_health_status_query.py`
+Alpha — `0.0.0`. The module structure is in place; implementations are being extracted and generalized from working domain-specific code in `bvp/packages/bvp-cs`. See `DESIGN.md` for the intended architecture and `PLAN.md` for implementation sequencing.
