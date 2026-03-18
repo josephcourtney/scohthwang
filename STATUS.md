@@ -2,14 +2,16 @@
 
 ## Current focus
 
-Phase 2 complete. Next: Phase 3 (`align.py`, Needleman-Wunsch + offset inference).
+Phase 4 complete. Next: Phase 5 (`block.py`) and Phase 6 (`match.py`) — independent after Phase 5 defines `BlockingFn`.
 
 ## Current state summary
 
 - Version `0.0.0`, alpha.
 - `models.py` implemented and fully tested (16 unit tests).
-- `assign.py` implemented and fully tested (22 unit tests); bvp-cs migration notes written.
-- Remaining source modules (`canonicalize.py`, `block.py`, `score.py`, `align.py`, `match.py`) are empty stubs.
+- `assign.py` implemented and fully tested (22 unit tests).
+- `align.py` implemented and fully tested (28 unit tests including 1 property-based); bvp-cs migration notes updated.
+- `score.py` implemented and fully tested (20 unit tests); bvp-cs migration notes updated.
+- Remaining source modules (`canonicalize.py`, `block.py`, `match.py`) are empty stubs.
 - Tooling (ruff, ty, pytest, uv) fully configured and functional.
 - DESIGN.md, PLAN.md, TODO.md, and README.md reflect the current intended design.
 

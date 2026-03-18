@@ -4,45 +4,10 @@
 
 ## ~~Phase 2 — Assignment (`src/scohthwang/assign.py`)~~ ✓ complete
 
-## Phase 3 — Sequence alignment (`src/scohthwang/align.py`)
+## ~~Phase 3 — Sequence alignment (`src/scohthwang/align.py`)~~ ✓ complete
 
-Reference: `bvp/packages/bvp-cs/src/bvp_cs/algorithms/align.py`
+## ~~Phase 4 — Scoring (`src/scohthwang/score.py`)~~ ✓ complete
 
-- [ ] Implement `needleman_wunsch_alignment(left, right, *, match_score, mismatch_score, gap_score) -> tuple[list[AlignedPair], float]`
-  - `left`, `right`: `list[Hashable]`; comparison via `==`
-  - Tie-breaking: diagonal > up > left
-  - Empty inputs → `([], 0.0)`
-- [ ] Implement `infer_offset_from_sequences(left, right, *, max_span, ambiguous_delta) -> OffsetInferenceResult`
-  - `left`, `right`: `list[tuple[int, Hashable]]`
-  - Scan all offsets in natural range (clipped to `max_span` if provided)
-  - `offset=None` if no support or ambiguous within `ambiguous_delta`
-- [ ] Implement `infer_seq_offset(left_elements, right_elements, key_fn, *, max_span, min_support) -> OffsetInferenceResult`
-  - `key_fn(element) -> tuple[int, Hashable]`; delegates to `infer_offset_from_sequences`
-  - Returns `offset=None` if `compared < min_support`
-- [ ] Write `tests/unit/test_align.py`:
-  - NW: identical sequences, single deletion, single insertion, complete mismatch, empty inputs
-  - Offset inference: exact offset 0, exact non-zero offset, ambiguous case, under-supported case
-  - Property-based test (hypothesis): aligned pairs span full length of both sequences
-
-## Phase 4 — Scoring (`src/scohthwang/score.py`)
-
-Reference: `bvp/packages/bvp-cs/src/bvp_cs/algorithms/matching.py` (`pair_cost`, `MatchingConfig`)
-
-- [ ] Define `PairCostFn` Protocol: `__call__(self, left: Any, right: Any) -> float`
-- [ ] Define `ConstraintFn` Protocol: `__call__(self, left: Any, right: Any) -> bool`
-- [ ] Define `WeightedFieldCost` dataclass: `field_fn: Callable[[Any], float]`, `weight: float`, `max_diff: float | None`
-- [ ] Define `PairCostConfig` dataclass: `constraints: list[ConstraintFn]`, `field_costs: list[WeightedFieldCost]`, `unmatched_cost: float`, `large_cost: float = 1e9`
-- [ ] Implement `make_pair_cost_fn(config: PairCostConfig) -> PairCostFn`
-  - Any failing constraint → return `config.large_cost`
-  - Sum `weight * abs(field_fn(left) - field_fn(right))` for each field cost
-  - If `max_diff` exceeded for any field → return `config.large_cost`
-- [ ] Implement `make_nested_cost_fn(inner_match_fn, left_items_fn, right_items_fn, unmatched_cost) -> PairCostFn`
-  - Calls `inner_match_fn(left_items_fn(left), right_items_fn(right))` and returns `result.total_cost`
-- [ ] Write `tests/unit/test_score.py`:
-  - Constraint failure returns `large_cost`
-  - Soft penalties accumulate correctly
-  - `max_diff` exceeded returns `large_cost`
-  - Nested cost function calls inner match and returns its `total_cost`
 
 ## Phase 5 — Blocking (`src/scohthwang/block.py`)
 
