@@ -36,15 +36,15 @@ Core goals:
 
 The library is organized as six modules. Each has a narrow, well-defined responsibility and can be used independently or composed with the others.
 
-| Module | Responsibility |
-|---|---|
-| `models.py` | Shared types: element containers, candidate pairs, match results, cost matrix representations |
-| `canonicalize.py` | Normalize heterogeneous input records into a stable canonical form suitable for comparison |
-| `block.py` | Generate the candidate pair set, reducing the O(n²) space to a tractable subset |
-| `score.py` | Compute costs/scores for candidate pairs; supports hard constraints, soft penalties, and composition |
-| `align.py` | Sequence alignment: Needleman-Wunsch global alignment and offset-scan inference |
-| `match.py` | Hierarchical matching pipelines: group elements by key, match within groups, handle strict and flexible modes |
-| `assign.py` | Optimal assignment: Hungarian algorithm for minimum-cost bipartite matching with unmatched support |
+| Module            | Responsibility                                                                                                |
+| ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| `models.py`       | Shared types: element containers, candidate pairs, match results, cost matrix representations                 |
+| `canonicalize.py` | Normalize heterogeneous input records into a stable canonical form suitable for comparison                    |
+| `block.py`        | Generate the candidate pair set, reducing the O(n²) space to a tractable subset                               |
+| `score.py`        | Compute costs/scores for candidate pairs; supports hard constraints, soft penalties, and composition          |
+| `align.py`        | Sequence alignment: Needleman-Wunsch global alignment and offset-scan inference                               |
+| `match.py`        | Hierarchical matching pipelines: group elements by key, match within groups, handle strict and flexible modes |
+| `assign.py`       | Optimal assignment: Hungarian algorithm for minimum-cost bipartite matching with unmatched support            |
 
 ### Data flow
 
@@ -143,13 +143,13 @@ Non-deterministic behavior (random seeding, hash-order iteration, time-dependent
 
 The implementations are informed by, and generalize, working domain-specific code in `bvp/packages/bvp-cs`:
 
-| scohthwang module | Origin in bvp-cs |
-|---|---|
-| `assign.py` | `algorithms/hungarian.py` — `hungarian_with_unmatched`, `hungarian_square` |
-| `align.py` | `algorithms/align.py` — `needleman_wunsch_alignment`, `infer_best_offset_from_sequences`, `infer_seq_offset` |
-| `score.py` | `algorithms/matching.py` — `pair_cost`, `MatchingConfig` |
-| `match.py` | `algorithms/matching.py` — `match_atoms_in_residue`, `optimal_shift_matching_all_residues` |
-| `canonicalize.py` | `algorithms/canonicalize.py` — `canonicalize_row`, `chain_like_id`, `residue_key` |
-| `block.py` | Implicit in `matching.py` grouping logic; no standalone equivalent exists in bvp-cs |
+| scohthwang module | Origin in bvp-cs                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| `assign.py`       | `algorithms/hungarian.py`: `hungarian_with_unmatched`, `hungarian_square`                                   |
+| `align.py`        | `algorithms/align.py`: `needleman_wunsch_alignment`, `infer_best_offset_from_sequences`, `infer_seq_offset` |
+| `score.py`        | `algorithms/matching.py`: `pair_cost`, `MatchingConfig`                                                     |
+| `match.py`        | `algorithms/matching.py`: `match_atoms_in_residue`, `optimal_shift_matching_all_residues`                   |
+| `canonicalize.py` | `algorithms/canonicalize.py`: `canonicalize_row`, `chain_like_id`, `residue_key`                            |
+| `block.py`        | Implicit in `matching.py` grouping logic; no standalone equivalent exists in bvp-cs                          |
 
 The domain-specific data models (`ShiftRow`, `MatchedRow`, nucleus weighting, chain/residue grouping logic) are **not** carried over — callers supply their own element types and cost functions.
