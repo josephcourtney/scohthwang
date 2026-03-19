@@ -2,18 +2,20 @@
 
 ## Current focus
 
-Phase 6 complete. Next: Phase 7 (`canonicalize.py`) and public API (`__init__.py`).
+All implementation phases complete. Library is feature-complete at v0.0.0.
 
 ## Current state summary
 
-- Version `0.0.0`, alpha.
-- `models.py` implemented and fully tested (16 unit tests).
-- `assign.py` implemented and fully tested (22 unit tests).
-- `align.py` implemented and fully tested (28 unit tests including 1 property-based); bvp-cs migration notes updated.
-- `score.py` implemented and fully tested (20 unit tests); bvp-cs migration notes updated.
-- `block.py` implemented and fully tested (33 unit tests).
-- `match.py` implemented and fully tested (28 unit tests).
-- Remaining source module `canonicalize.py` is an empty stub; `__init__.py` is empty pending Phase 7.
+- Version `0.0.0`, alpha — all 7 implementation phases done.
+- `models.py` — 16 unit tests.
+- `assign.py` — 22 unit tests.
+- `align.py` — 28 unit tests (including 1 property-based); bvp-cs migration notes updated.
+- `score.py` — 20 unit tests; bvp-cs migration notes updated.
+- `block.py` — 33 unit tests.
+- `match.py` — 28 unit tests.
+- `canonicalize.py` — 29 unit tests.
+- `__init__.py` — full public API exported (29 symbols across all modules).
+- Tooling (ruff, ty, pytest, uv) fully configured and functional.
 - Tooling (ruff, ty, pytest, uv) fully configured and functional.
 - DESIGN.md, PLAN.md, TODO.md, and README.md reflect the current intended design.
 
