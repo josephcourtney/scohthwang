@@ -42,7 +42,7 @@ This pattern appears in many domains: comparing biological sequences at the resi
 
 ### Assignment (`assign`)
 
-**Hungarian algorithm** — solve the minimum-cost bipartite assignment problem. Supports rectangular cost matrices (different numbers of elements on each side) and unmatched elements via a configurable unmatched cost that is compared against the best available match cost.
+**Hungarian algorithm** — solve the minimum-cost bipartite assignment problem. Supports rectangular and square cost matrices, and lets either side leave elements unmatched via a configurable unmatched cost that acts as a true opt-out threshold.
 
 ### Scoring (`score`)
 
@@ -58,7 +58,7 @@ This pattern appears in many domains: comparing biological sequences at the resi
 
 **Hierarchical matching** — group elements by a key (e.g., sequence position and label), then match within each group. Operates across one or more levels of nesting.
 
-**Strict and flexible modes** — strict mode requires key equality before matching; a reconciliation fallback uses cost-guided pairing when strict matching fails or yields poor results.
+**Strict and flexible modes** — strict mode requires key equality before matching. Flexible mode assigns groups by a cost objective: at the leaf it derives that objective from true element-level matching, and at intermediate levels it uses the level cost function directly.
 
 ### Canonicalization (`canonicalize`)
 
@@ -107,4 +107,4 @@ To run the validation suite:
 
 ## Project Status
 
-Alpha — `0.0.0`. The module structure is in place; implementations are being extracted and generalized from working domain-specific code in `bvp/packages/bvp-cs`. See `DESIGN.md` for the intended architecture and `PLAN.md` for implementation sequencing.
+Alpha — `0.1.0`. The module structure is in place; implementations are being extracted and generalized from working domain-specific code in `bvp/packages/bvp-cs`. See `DESIGN.md` for the intended architecture and `PLAN.md` for implementation sequencing.

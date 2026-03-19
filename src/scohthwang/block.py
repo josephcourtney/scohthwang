@@ -114,12 +114,12 @@ def key_equality_block(
     ) -> Iterable[tuple[int, int]]:
         # Build an index from key → list of right-side positions.
         right_index: dict[object, list[int]] = {}
-        for j, r in enumerate(right):
-            k = key_fn(r)
+        for j, right_item in enumerate(right):
+            k = key_fn(right_item)
             right_index.setdefault(k, []).append(j)
 
-        for i, l in enumerate(left):
-            for j in right_index.get(key_fn(l), []):
+        for i, left_item in enumerate(left):
+            for j in right_index.get(key_fn(left_item), []):
                 yield i, j
 
     return _block
@@ -149,9 +149,9 @@ def predicate_block(
         left: Sequence[Any],
         right: Sequence[Any],
     ) -> Iterable[tuple[int, int]]:
-        for i, l in enumerate(left):
-            for j, r in enumerate(right):
-                if pred_fn(l, r):
+        for i, left_item in enumerate(left):
+            for j, right_item in enumerate(right):
+                if pred_fn(left_item, right_item):
                     yield i, j
 
     return _block
@@ -184,7 +184,7 @@ def compose_blocks(
     if not block_fns:
         msg = "compose_blocks requires at least one blocking function"
         raise ValueError(msg)
-    if mode not in ("union", "intersection"):
+    if mode not in {"union", "intersection"}:
         msg = f"mode must be 'union' or 'intersection', got {mode!r}"
         raise ValueError(msg)
 
@@ -204,7 +204,7 @@ def compose_blocks(
             candidate_sets = [set(fn(left, right)) for fn in block_fns]
             common = candidate_sets[0]
             for s in candidate_sets[1:]:
-                common = common & s
+                common &= s
             yield from sorted(common)
 
     return _block

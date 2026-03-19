@@ -32,6 +32,30 @@ Items should be categorized under these headings:
 
 ### Security
 
+## [0.1.0] - 2026-03-19
+
+### Added
+- add a minimal `scohthwang` CLI entry point with version and public-API listing commands so the published console script resolves correctly
+- add contract tests for square-matrix unmatched assignment, blocked-group unmatched behavior, zero-support offset inference, and `__all__` export coverage
+- add a packaging smoke test that builds a wheel, installs it into a fresh virtual environment, imports the package, and runs the published console script
+
+### Changed
+- change `hungarian_with_unmatched()` to model unmatched elements explicitly on both sides so square matrices can opt out when real pair costs exceed `unmatched_cost`
+- change flexible leaf matching to score candidate group pairs via true inner element matching instead of positional pairing
+- change flexible intermediate matching to report the same cost objective it uses to choose group assignments
+- change package metadata to version `0.1.0` and remove unused runtime dependencies from the published install surface
+
+### Deprecated
+
+### Removed
+
+### Fixed
+- fix `infer_offset_from_sequences()` so scans with zero comparable pairs return `offset=None`, matching the public contract
+- fix `make_canonicalizer()` to raise `ValueError` for missing fields, matching its documented contract
+- fix `tool.mutmut.paths_to_mutate` to target `src/scohthwang`
+
+### Security
+
 ## [0.0.0] - 2026-02-23
 
 ### Added

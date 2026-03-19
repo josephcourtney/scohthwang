@@ -29,12 +29,14 @@ Usage
     from dataclasses import dataclass
     from scohthwang.canonicalize import CanonicalizeRule, make_canonicalizer
 
+
     @dataclass(frozen=True)
     class Record:
         name: str | None
         auth_name: str | None
         seq_id: int | None
         auth_seq_id: int | None
+
 
     canonicalize = make_canonicalizer([
         CanonicalizeRule("name", ["auth_name"]),
@@ -55,7 +57,10 @@ with generic rule lists for any dataclass ``T``.
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, TypeVar
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 T = TypeVar("T")
 
@@ -88,7 +93,16 @@ class CanonicalizeRule:
 # ---------------------------------------------------------------------------
 
 
-def make_canonicalizer(rules: list[CanonicalizeRule]):  # -> Callable[[T], T]
+def _get_rule_attr[T](obj: T, field_name: str) -> object:
+    """Return ``obj.field_name`` or raise a contract-level ``ValueError``."""
+    try:
+        return getattr(obj, field_name)
+    except AttributeError as exc:
+        msg = f"field {field_name!r} does not exist on object of type {type(obj).__name__}"
+        raise ValueError(msg) from exc
+
+
+def make_canonicalizer(rules: list[CanonicalizeRule]) -> Callable[[T], T]:
     """Build a canonicalizer function from a list of :class:`CanonicalizeRule` objects.
 
     The returned function accepts any dataclass instance ``obj`` and returns a
@@ -118,13 +132,13 @@ def make_canonicalizer(rules: list[CanonicalizeRule]):  # -> Callable[[T], T]
     """
 
     def _canonicalize(obj: T) -> T:
-        updates: dict[str, Any] = {}
+        updates: dict[str, object] = {}
         for rule in rules:
-            current = getattr(obj, rule.field_name)
+            current = _get_rule_attr(obj, rule.field_name)
             if current is not None:
                 continue
             for fallback_name in rule.fallback_chain:
-                fallback_val = getattr(obj, fallback_name)
+                fallback_val = _get_rule_attr(obj, fallback_name)
                 if fallback_val is not None:
                     updates[rule.field_name] = fallback_val
                     break
@@ -176,7 +190,7 @@ def normalize_str(
 # ---------------------------------------------------------------------------
 
 
-def sort_key_none_last(v: Any) -> tuple:  # noqa: ANN401
+def sort_key_none_last(v: object) -> tuple:
     """Return a sort key that places ``None`` after all non-``None`` values.
 
     Comparable values are sorted naturally; ``None`` sorts last.

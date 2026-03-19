@@ -31,21 +31,26 @@ Matching is built in three layers, each composable:
    - *Strict mode* (default): groups are paired by key equality.  Groups with
      no counterpart on the other side have all their elements marked unmatched.
    - *Flexible mode*: groups are treated as elements at the group level.
-     The level's ``cost_fn`` is called with the full group element lists as
-     arguments (typically built with
-     :func:`~scohthwang.score.make_nested_cost_fn`).  The Hungarian algorithm
-     then assigns groups optimally before within-group recursion proceeds.
+     At the leaf, each candidate group pair is scored by running an inner
+     element-level match. At intermediate levels, the level's ``cost_fn`` is
+     called with the full group element lists as arguments (typically built
+     with :func:`~scohthwang.score.make_nested_cost_fn`). The Hungarian
+     algorithm then assigns groups optimally before within-group recursion
+     proceeds.
 
 ``cost_fn`` conventions by mode and position
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 - Last :class:`Level` (leaf) — any mode: ``cost_fn`` is an element-to-element
-  function passed directly to :func:`match_within_group`.
+  function passed directly to :func:`match_within_group`. In flexible leaf mode,
+  candidate group-pair costs are derived by running :func:`match_within_group`
+  on each group pair with this element-level function.
 - Intermediate :class:`Level` + strict: ``cost_fn`` is forwarded to inner
   levels; it is *not used* at the current level.
 - Intermediate :class:`Level` + flexible: ``cost_fn`` receives the raw element
-  lists of each group as ``left`` / ``right`` arguments.  Use
-  :func:`~scohthwang.score.make_nested_cost_fn` to build such a function from
-  an inner matching function.
+  lists of each group as ``left`` / ``right`` arguments. Its value is the
+  objective used to assign groups and is also added directly to the returned
+  ``total_cost``. Use :func:`~scohthwang.score.make_nested_cost_fn` when that
+  objective should equal the downstream recursive matching cost.
 
 Source
 ------
@@ -68,7 +73,6 @@ if TYPE_CHECKING:
 
     from scohthwang.block import BlockingFn
     from scohthwang.models import CostMatrix
-    from scohthwang.score import PairCostFn
 
 
 # ---------------------------------------------------------------------------
@@ -104,10 +108,22 @@ class Level:
     """
 
     key_fn: Callable[[Any], Hashable]
-    cost_fn: PairCostFn
+    cost_fn: Callable[[Any, Any], float]
     unmatched_cost: float
     block_fn: BlockingFn | None = field(default=None)
     mode: Literal["strict", "flexible"] = "strict"
+
+
+@dataclass(frozen=True)
+class _FlexibleGroups:
+    """Prepared group collections used by the flexible matching helpers."""
+
+    left_keys: list[Any]
+    right_keys: list[Any]
+    left_group_elems: list[list[Any]]
+    right_group_elems: list[list[Any]]
+    all_left_indices: list[int]
+    all_right_indices: list[int]
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +197,75 @@ def _remap_result(
     )
 
 
+def _prepare_flexible_groups(
+    left_groups: dict[Any, tuple[list[int], list[Any]]],
+    right_groups: dict[Any, tuple[list[int], list[Any]]],
+) -> _FlexibleGroups:
+    """Materialize group keys, elements, and flattened original indices."""
+    left_keys = list(left_groups)
+    right_keys = list(right_groups)
+    return _FlexibleGroups(
+        left_keys=left_keys,
+        right_keys=right_keys,
+        left_group_elems=[left_groups[key][1] for key in left_keys],
+        right_group_elems=[right_groups[key][1] for key in right_keys],
+        all_left_indices=[index for key in left_keys for index in left_groups[key][0]],
+        all_right_indices=[index for key in right_keys for index in right_groups[key][0]],
+    )
+
+
+def _iter_candidate_group_pairs(
+    groups: _FlexibleGroups,
+    block_fn: BlockingFn | None,
+) -> list[tuple[int, int]]:
+    """Return candidate group-pair indices in deterministic order."""
+    if block_fn is None:
+        return [
+            (left_index, right_index)
+            for left_index in range(len(groups.left_keys))
+            for right_index in range(len(groups.right_keys))
+        ]
+    return list(block_fn(groups.left_group_elems, groups.right_group_elems))
+
+
+def _build_flexible_leaf_costs(
+    groups: _FlexibleGroups,
+    level: Level,
+) -> tuple[CostMatrix, dict[tuple[int, int], MatchResult]]:
+    """Build group-pair costs from true element-level matches at the leaf."""
+    group_cost: CostMatrix = [[LARGE_COST] * len(groups.right_keys) for _ in range(len(groups.left_keys))]
+    pair_results: dict[tuple[int, int], MatchResult] = {}
+
+    for left_index, right_index in _iter_candidate_group_pairs(groups, None):
+        inner = match_within_group(
+            groups.left_group_elems[left_index],
+            groups.right_group_elems[right_index],
+            level.cost_fn,
+            level.unmatched_cost,
+            block_fn=level.block_fn,
+        )
+        pair_results[left_index, right_index] = inner
+        group_cost[left_index][right_index] = inner.total_cost
+
+    return group_cost, pair_results
+
+
+def _build_flexible_intermediate_costs(
+    groups: _FlexibleGroups,
+    level: Level,
+) -> CostMatrix:
+    """Build intermediate flexible costs directly from the level objective."""
+    group_cost: CostMatrix = [[LARGE_COST] * len(groups.right_keys) for _ in range(len(groups.left_keys))]
+
+    for left_index, right_index in _iter_candidate_group_pairs(groups, level.block_fn):
+        group_cost[left_index][right_index] = level.cost_fn(
+            groups.left_group_elems[left_index],
+            groups.right_group_elems[right_index],
+        )
+
+    return group_cost
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -189,7 +274,7 @@ def _remap_result(
 def match_within_group(
     left: Sequence[Any],
     right: Sequence[Any],
-    cost_fn: PairCostFn,
+    cost_fn: Callable[[Any, Any], float],
     unmatched_cost: float,
     *,
     block_fn: BlockingFn | None = None,
@@ -277,7 +362,7 @@ def group_and_match(
     left: Sequence[Any],
     right: Sequence[Any],
     key_fn: Callable[[Any], Hashable],
-    cost_fn: PairCostFn,
+    cost_fn: Callable[[Any, Any], float],
     unmatched_cost: float,
     *,
     block_fn: BlockingFn | None = None,
@@ -318,11 +403,9 @@ def group_and_match(
     all_keys = set(left_groups) | set(right_groups)
 
     for key in all_keys:
-        l_indices, l_elems = left_groups.get(key, ([], []))
-        r_indices, r_elems = right_groups.get(key, ([], []))
-        results[key] = match_within_group(
-            l_elems, r_elems, cost_fn, unmatched_cost, block_fn=block_fn
-        )
+        _l_indices, l_elems = left_groups.get(key, ([], []))
+        _r_indices, r_elems = right_groups.get(key, ([], []))
+        results[key] = match_within_group(l_elems, r_elems, cost_fn, unmatched_cost, block_fn=block_fn)
 
     return results
 
@@ -377,8 +460,7 @@ def hierarchical_match(
 
     if level.mode == "strict":
         return _strict_intermediate(left_groups, right_groups, remaining, level.unmatched_cost)
-    else:
-        return _flexible_intermediate(left_groups, right_groups, level, remaining)
+    return _flexible_intermediate(left_groups, right_groups, level, remaining)
 
 
 # ---------------------------------------------------------------------------
@@ -397,8 +479,7 @@ def _hierarchical_leaf(
 
     if level.mode == "strict":
         return _strict_leaf(left_groups, right_groups, level)
-    else:
-        return _flexible_leaf(left_groups, right_groups, level)
+    return _flexible_leaf(left_groups, right_groups, level)
 
 
 def _strict_leaf(
@@ -434,82 +515,42 @@ def _flexible_leaf(
     right_groups: dict[Any, tuple[list[int], list[Any]]],
     level: Level,
 ) -> MatchResult:
-    """Flexible leaf: assign groups via cost_fn (group-to-group), pair elements greedily.
+    """Flexible leaf: assign groups by true inner match cost, then remap pairs."""
+    groups = _prepare_flexible_groups(left_groups, right_groups)
 
-    At the leaf level, ``cost_fn`` is a group-level function (takes element lists).
-    After optimal group assignment via the Hungarian algorithm, elements within each
-    matched group pair are paired positionally (index 0 ↔ index 0, etc.).  Excess
-    elements in either group are marked unmatched at ``unmatched_cost`` each.
-
-    The returned ``total_cost`` is the sum of group-assignment costs for matched
-    group pairs plus ``unmatched_cost`` for every unmatched element.
-    """
-    left_keys = list(left_groups)
-    right_keys = list(right_groups)
-    m_g = len(left_keys)
-    n_g = len(right_keys)
-
-    if m_g == 0 and n_g == 0:
+    if not groups.left_keys and not groups.right_keys:
         return MatchResult(pairs=[], unmatched_left=[], unmatched_right=[], total_cost=0.0)
 
-    all_l_indices = [idx for k in left_keys for idx in left_groups[k][0]]
-    all_r_indices = [idx for k in right_keys for idx in right_groups[k][0]]
+    if not groups.left_keys:
+        return _unmatched_result([], groups.all_right_indices, level.unmatched_cost)
+    if not groups.right_keys:
+        return _unmatched_result(groups.all_left_indices, [], level.unmatched_cost)
 
-    if m_g == 0:
-        return _unmatched_result([], all_r_indices, level.unmatched_cost)
-    if n_g == 0:
-        return _unmatched_result(all_l_indices, [], level.unmatched_cost)
-
-    left_group_elems = [left_groups[k][1] for k in left_keys]
-    right_group_elems = [right_groups[k][1] for k in right_keys]
-
-    # Build group-to-group cost matrix using the group-level cost_fn.
-    if level.block_fn is not None:
-        group_cost: CostMatrix = [[LARGE_COST] * n_g for _ in range(m_g)]
-        for gi, gj in level.block_fn(left_group_elems, right_group_elems):
-            group_cost[gi][gj] = level.cost_fn(left_group_elems[gi], right_group_elems[gj])
-    else:
-        group_cost = [
-            [level.cost_fn(left_group_elems[gi], right_group_elems[gj]) for gj in range(n_g)]
-            for gi in range(m_g)
-        ]
-
+    group_cost, pair_results = _build_flexible_leaf_costs(groups, level)
     match_for_left_group, _ = hungarian_with_unmatched(group_cost, level.unmatched_cost)
 
     parts: list[MatchResult] = []
     matched_right_groups: set[int] = set()
 
-    for gi, gj in enumerate(match_for_left_group):
-        lk = left_keys[gi]
-        l_indices, _ = left_groups[lk]
+    for left_index, right_index in enumerate(match_for_left_group):
+        left_key = groups.left_keys[left_index]
+        left_indices, _ = left_groups[left_key]
 
-        if gj is None:
-            parts.append(_unmatched_result(l_indices, [], level.unmatched_cost))
+        if right_index is None:
+            parts.append(_unmatched_result(left_indices, [], level.unmatched_cost))
             continue
 
-        matched_right_groups.add(gj)
-        rk = right_keys[gj]
-        r_indices, _ = right_groups[rk]
+        matched_right_groups.add(right_index)
+        right_key = groups.right_keys[right_index]
+        right_indices, _ = right_groups[right_key]
+        inner = pair_results[left_index, right_index]
+        parts.append(_remap_result(inner, left_indices, right_indices))
 
-        # Pair elements positionally within the matched group pair.
-        min_len = min(len(l_indices), len(r_indices))
-        elem_pairs = [(l_indices[i], r_indices[i]) for i in range(min_len)]
-        excess_l = l_indices[min_len:]
-        excess_r = r_indices[min_len:]
-        gc = group_cost[gi][gj]
-        elem_cost = gc + level.unmatched_cost * (len(excess_l) + len(excess_r))
-        parts.append(MatchResult(
-            pairs=elem_pairs,
-            unmatched_left=excess_l,
-            unmatched_right=excess_r,
-            total_cost=elem_cost,
-        ))
-
-    for gj, rk in enumerate(right_keys):
-        if gj in matched_right_groups:
+    for right_index, right_key in enumerate(groups.right_keys):
+        if right_index in matched_right_groups:
             continue
-        r_indices, _ = right_groups[rk]
-        parts.append(_unmatched_result([], r_indices, level.unmatched_cost))
+        right_indices, _ = right_groups[right_key]
+        parts.append(_unmatched_result([], right_indices, level.unmatched_cost))
 
     return _merge_results(parts)
 
@@ -547,62 +588,51 @@ def _flexible_intermediate(
     level: Level,
     remaining: Sequence[Level],
 ) -> MatchResult:
-    """Flexible intermediate: score group pairs with cost_fn, assign, recurse."""
-    left_keys = list(left_groups)
-    right_keys = list(right_groups)
-    m_g = len(left_keys)
-    n_g = len(right_keys)
+    """Flexible intermediate: optimize and report the level objective."""
+    groups = _prepare_flexible_groups(left_groups, right_groups)
 
-    if m_g == 0 and n_g == 0:
+    if not groups.left_keys and not groups.right_keys:
         return MatchResult(pairs=[], unmatched_left=[], unmatched_right=[], total_cost=0.0)
 
-    all_l_indices = [idx for k in left_keys for idx in left_groups[k][0]]
-    all_r_indices = [idx for k in right_keys for idx in right_groups[k][0]]
+    if not groups.left_keys:
+        return _unmatched_result([], groups.all_right_indices, level.unmatched_cost)
+    if not groups.right_keys:
+        return _unmatched_result(groups.all_left_indices, [], level.unmatched_cost)
 
-    if m_g == 0:
-        return _unmatched_result([], all_r_indices, level.unmatched_cost)
-    if n_g == 0:
-        return _unmatched_result(all_l_indices, [], level.unmatched_cost)
-
-    left_group_elems = [left_groups[k][1] for k in left_keys]
-    right_group_elems = [right_groups[k][1] for k in right_keys]
-
-    # Build group-to-group cost matrix using level.cost_fn.
-    # For flexible intermediate levels, cost_fn is a group-level function.
-    if level.block_fn is not None:
-        group_cost: CostMatrix = [[LARGE_COST] * n_g for _ in range(m_g)]
-        for gi, gj in level.block_fn(left_group_elems, right_group_elems):
-            group_cost[gi][gj] = level.cost_fn(left_group_elems[gi], right_group_elems[gj])
-    else:
-        group_cost = [
-            [level.cost_fn(left_group_elems[gi], right_group_elems[gj]) for gj in range(n_g)]
-            for gi in range(m_g)
-        ]
-
+    group_cost = _build_flexible_intermediate_costs(groups, level)
     match_for_left_group, _ = hungarian_with_unmatched(group_cost, level.unmatched_cost)
 
     parts: list[MatchResult] = []
     matched_right_groups: set[int] = set()
+    matched_cost_total = 0.0
 
-    for gi, gj in enumerate(match_for_left_group):
-        lk = left_keys[gi]
-        l_indices, l_elems = left_groups[lk]
+    for left_index, right_index in enumerate(match_for_left_group):
+        left_key = groups.left_keys[left_index]
+        left_indices, left_elems = left_groups[left_key]
 
-        if gj is None:
-            parts.append(_unmatched_result(l_indices, [], level.unmatched_cost))
+        if right_index is None:
+            parts.append(_unmatched_result(left_indices, [], level.unmatched_cost))
             continue
 
-        matched_right_groups.add(gj)
-        rk = right_keys[gj]
-        r_indices, r_elems = right_groups[rk]
+        matched_right_groups.add(right_index)
+        matched_cost_total += group_cost[left_index][right_index]
+        right_key = groups.right_keys[right_index]
+        right_indices, right_elems = right_groups[right_key]
 
-        inner = hierarchical_match(l_elems, r_elems, remaining)
-        parts.append(_remap_result(inner, l_indices, r_indices))
+        inner = hierarchical_match(left_elems, right_elems, remaining)
+        parts.append(_remap_result(inner, left_indices, right_indices))
 
-    for gj, rk in enumerate(right_keys):
-        if gj in matched_right_groups:
+    for right_index, right_key in enumerate(groups.right_keys):
+        if right_index in matched_right_groups:
             continue
-        r_indices, _ = right_groups[rk]
-        parts.append(_unmatched_result([], r_indices, level.unmatched_cost))
+        right_indices, _ = right_groups[right_key]
+        parts.append(_unmatched_result([], right_indices, level.unmatched_cost))
 
-    return _merge_results(parts)
+    merged = _merge_results(parts)
+    unmatched_total = level.unmatched_cost * (len(merged.unmatched_left) + len(merged.unmatched_right))
+    return MatchResult(
+        pairs=merged.pairs,
+        unmatched_left=merged.unmatched_left,
+        unmatched_right=merged.unmatched_right,
+        total_cost=matched_cost_total + unmatched_total,
+    )

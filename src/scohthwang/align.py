@@ -108,9 +108,7 @@ def _fill_alignment_matrices(
     m = len(right)
     for i in range(1, n + 1):
         for j in range(1, m + 1):
-            diag = scores[i - 1][j - 1] + (
-                match_score if left[i - 1] == right[j - 1] else mismatch_score
-            )
+            diag = scores[i - 1][j - 1] + (match_score if left[i - 1] == right[j - 1] else mismatch_score)
             up = scores[i - 1][j] + gap_score
             left_score = scores[i][j - 1] + gap_score
             if diag >= up and diag >= left_score:
@@ -248,8 +246,8 @@ def _score_offsets_top2(
 
 
 def needleman_wunsch_alignment(
-    left: list[Hashable],
-    right: list[Hashable],
+    left: Sequence[Hashable],
+    right: Sequence[Hashable],
     *,
     match_score: float,
     mismatch_score: float,
@@ -287,13 +285,23 @@ def needleman_wunsch_alignment(
     If only one is empty, the result consists entirely of gap pairs.
     Tie-breaking: diagonal > up > left.
     """
-    n = len(left)
-    m = len(right)
+    left_items = list(left)
+    right_items = list(right)
+    n = len(left_items)
+    m = len(right_items)
     if n == 0 and m == 0:
         return [], 0.0
 
     scores, trace = _initialize_alignment_matrices(n, m, gap_score)
-    _fill_alignment_matrices(scores, trace, left, right, match_score, mismatch_score, gap_score)
+    _fill_alignment_matrices(
+        scores,
+        trace,
+        left_items,
+        right_items,
+        match_score,
+        mismatch_score,
+        gap_score,
+    )
     aligned = _traceback_alignment(trace, n, m)
     return aligned, scores[n][m]
 
@@ -348,6 +356,8 @@ def infer_offset_from_sequences(
 
     best, second = _score_offsets_top2(left_map, right_map, offset_min, offset_max)
     if best is None:
+        return OffsetInferenceResult(offset=None, agreement=0.0, compared=0, ambiguous=True)
+    if best.compared == 0:
         return OffsetInferenceResult(offset=None, agreement=0.0, compared=0, ambiguous=True)
 
     ambiguous = _is_ambiguous(best=best, second=second, ambiguous_delta=ambiguous_delta)

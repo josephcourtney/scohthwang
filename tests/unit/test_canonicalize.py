@@ -13,7 +13,6 @@ from scohthwang.canonicalize import (
     sort_key_none_last,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures: minimal dataclasses used across tests
 # ---------------------------------------------------------------------------
@@ -125,6 +124,15 @@ def test_numeric_field_not_overwritten() -> None:
     r = NumRecord(seq_id=7, auth_seq_id=42)
     out = fn(r)
     assert out.seq_id == 7
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_missing_field_raises_value_error() -> None:
+    fn = make_canonicalizer([CanonicalizeRule("missing", ["auth_name"])])
+    r = Record(name=None, auth_name="ALA", code="X", auth_code="Y")
+    with pytest.raises(ValueError, match="missing"):
+        fn(r)
 
 
 # ---------------------------------------------------------------------------

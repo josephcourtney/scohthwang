@@ -62,9 +62,7 @@ def test_nw_right_empty() -> None:
 @pytest.mark.small
 def test_nw_identical_sequences() -> None:
     seq = ["A", "B", "C"]
-    pairs, score = needleman_wunsch_alignment(
-        seq, seq, match_score=2.0, mismatch_score=-1.0, gap_score=-2.0
-    )
+    pairs, score = needleman_wunsch_alignment(seq, seq, match_score=2.0, mismatch_score=-1.0, gap_score=-2.0)
     assert pairs == [(0, 0), (1, 1), (2, 2)]
     assert score == pytest.approx(6.0)
 
@@ -265,8 +263,9 @@ def test_offset_max_span_restricts_range() -> None:
     left = [(11, "A"), (12, "B")]
     right = [(1, "A"), (2, "B")]
     result = infer_offset_from_sequences(left, right, max_span=3)
-    # No overlapping positions exist within max_span; best candidate has compared=0
-    assert result.offset is None or result.compared == 0
+    # No overlapping positions exist within max_span.
+    assert result.offset is None
+    assert result.compared == 0
 
 
 @pytest.mark.unit

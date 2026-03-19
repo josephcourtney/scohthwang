@@ -28,6 +28,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from scohthwang.models import LARGE_COST
+
 if TYPE_CHECKING:
     from scohthwang.models import CostMatrix
 
@@ -133,30 +135,43 @@ def _build_assignment(p: list[int], n: int) -> list[int]:
     return assignment
 
 
-def _pad_to_square(
+def _augment_with_unmatched_dummies(
     cost: CostMatrix,
     unmatched_cost: float,
 ) -> tuple[CostMatrix, int, int, int]:
-    """Pad a rectangular cost matrix to square by filling dummy rows/columns.
+    """Augment a cost matrix with explicit unmatched slots for both sides.
 
-    Real entries (``i < m``, ``j < n``) are copied verbatim.
-    Dummy entries (one real index, one dummy index) are set to ``unmatched_cost``.
-    Dummy-to-dummy entries are set to ``0.0`` (cost-free pairing of dummies).
+    Rows are ``left`` elements followed by one dummy row per right element.
+    Columns are ``right`` elements followed by one dummy column per left element.
 
-    Returns ``(square_matrix, n_left, n_right, size)``.
+    This lets any real element opt out independently, even when the original
+    matrix is square:
+
+    - ``left[i] -> right[j]`` uses the real pair cost ``cost[i][j]``.
+    - ``left[i] -> left_dummy[i]`` costs ``unmatched_cost``.
+    - ``right_dummy[j] -> right[j]`` costs ``unmatched_cost``.
+    - ``right_dummy[*] -> left_dummy[*]`` costs ``0.0`` so unused dummy slots
+      can pair off without affecting the objective.
+
+    All other dummy connections are blocked with :data:`LARGE_COST`.
+
+    Returns ``(square_matrix, n_left, n_right, size)`` where ``size == m + n``.
     """
     m = len(cost)
     n = len(cost[0]) if cost else 0
-    size = max(m, n)
-    square: CostMatrix = [[0.0] * size for _ in range(size)]
-    for i in range(size):
-        for j in range(size):
-            if i < m and j < n:
-                square[i][j] = cost[i][j]
-            elif i < m or j < n:
-                square[i][j] = unmatched_cost
-            else:
-                square[i][j] = 0.0
+    size = m + n
+    square: CostMatrix = [[LARGE_COST] * size for _ in range(size)]
+
+    for i in range(m):
+        for j in range(n):
+            square[i][j] = cost[i][j]
+        square[i][n + i] = unmatched_cost
+
+    for j in range(n):
+        square[m + j][j] = unmatched_cost
+        for i in range(m):
+            square[m + j][n + i] = 0.0
+
     return square, m, n, size
 
 
@@ -165,41 +180,19 @@ def _extract_row_matching(
     *,
     m: int,
     n: int,
-) -> tuple[list[int | None], set[int]]:
+) -> list[int | None]:
     """Strip dummy assignments from a square assignment result.
 
-    Returns ``(match_for_left, matched_right)`` where ``match_for_left[i]``
-    is the right index paired with left element ``i``, or ``None`` if
-    element ``i`` was matched to a dummy column.
+    Returns ``match_for_left`` where ``match_for_left[i]`` is the right index
+    paired with left element ``i``, or ``None`` if element ``i`` was matched
+    to a dummy column.
     """
     match_for_left: list[int | None] = [None] * m
-    matched_right: set[int] = set()
     for i in range(m):
         j = assignment[i]
         if j < n:
             match_for_left[i] = j
-            matched_right.add(j)
-    return match_for_left, matched_right
-
-
-def _total_matching_cost(
-    match_for_left: list[int | None],
-    matched_right: set[int],
-    *,
-    cost: CostMatrix,
-    unmatched_cost: float,
-) -> float:
-    """Sum matched-pair costs plus ``unmatched_cost`` for each unmatched element."""
-    m = len(match_for_left)
-    n = len(cost[0]) if cost else 0
-    total = 0.0
-    for i in range(m):
-        j = match_for_left[i]
-        total += unmatched_cost if j is None else cost[i][j]
-    for j in range(n):
-        if j not in matched_right:
-            total += unmatched_cost
-    return total
+    return match_for_left
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +243,9 @@ def hungarian_with_unmatched(
     """Solve a rectangular assignment allowing unmatched elements.
 
     Either side may have more elements than the other; unmatched elements
-    incur ``unmatched_cost`` each.  Internally pads ``cost`` to square, runs
-    :func:`hungarian_square`, then strips dummy assignments.
+    incur ``unmatched_cost`` each. Internally augments the problem with
+    explicit dummy rows and columns so any real element may be left unmatched,
+    even when the input matrix is square.
 
     Parameters
     ----------
@@ -261,10 +255,10 @@ def hungarian_with_unmatched(
         columns).
     unmatched_cost:
         Penalty applied to each element left without a partner.  This value is
-        used as the cost of dummy (padding) assignments introduced to equalise
-        the matrix dimensions.  It does **not** act as an opt-out threshold:
-        when ``len(cost) == len(cost[0])``, no dummies are added and all
-        elements are matched regardless of pair costs.
+        used as the cost of explicit unmatched assignments for both sides.
+        It therefore acts as a true opt-out threshold: if every available pair
+        for an element costs more than ``unmatched_cost``, the optimal solution
+        may leave that element unmatched.
 
     Returns
     -------
@@ -284,16 +278,11 @@ def hungarian_with_unmatched(
         msg = f"cost matrix rows must all have the same length (got {lengths})"
         raise ValueError(msg)
 
-    square, m, n, size = _pad_to_square(cost, unmatched_cost)
+    square, m, n, size = _augment_with_unmatched_dummies(cost, unmatched_cost)
     if size == 0:
         return [], 0.0
 
     assignment = hungarian_square(square)
-    match_for_left, matched_right = _extract_row_matching(assignment, m=m, n=n)
-    total_cost = _total_matching_cost(
-        match_for_left,
-        matched_right,
-        cost=cost,
-        unmatched_cost=unmatched_cost,
-    )
+    match_for_left = _extract_row_matching(assignment, m=m, n=n)
+    total_cost = sum(square[i][assignment[i]] for i in range(size))
     return match_for_left, total_cost

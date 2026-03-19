@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import operator
+
 import pytest
 
 from scohthwang.block import (
@@ -30,7 +32,7 @@ def _recall_ok(
     candidates: set[tuple[int, int]],
     known_correct: set[tuple[int, int]],
 ) -> bool:
-    """True iff every known-correct pair is in the candidate set."""
+    """Return True when every known-correct pair is in the candidate set."""
     return known_correct <= candidates
 
 
@@ -127,7 +129,7 @@ def test_key_equality_one_shared_key() -> None:
 def test_key_equality_field_extractor() -> None:
     left = [{"chain": "A"}, {"chain": "B"}, {"chain": "C"}]
     right = [{"chain": "B"}, {"chain": "D"}]
-    fn = key_equality_block(lambda x: x["chain"])
+    fn = key_equality_block(operator.itemgetter("chain"))
     result = set(fn(left, right))
     assert result == {(1, 0)}
 
@@ -151,7 +153,7 @@ def test_key_equality_multiple_right_matches() -> None:
 def test_key_equality_recall() -> None:
     left = [{"type": "CA"}, {"type": "CB"}, {"type": "CA"}]
     right = [{"type": "CB"}, {"type": "CA"}]
-    fn = key_equality_block(lambda x: x["type"])
+    fn = key_equality_block(operator.itemgetter("type"))
     known_correct = {(0, 1), (1, 0), (2, 1)}
     candidates = set(fn(left, right))
     assert _recall_ok(candidates, known_correct)
@@ -165,14 +167,14 @@ def test_key_equality_recall() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_predicate_empty_sequences() -> None:
-    fn = predicate_block(lambda l, r: True)
+    fn = predicate_block(lambda _left_item, _right_item: True)
     assert list(fn([], [])) == []
 
 
 @pytest.mark.unit
 @pytest.mark.small
 def test_predicate_always_false() -> None:
-    fn = predicate_block(lambda l, r: False)
+    fn = predicate_block(lambda _left_item, _right_item: False)
     assert list(fn([1, 2, 3], [4, 5])) == []
 
 
@@ -181,7 +183,7 @@ def test_predicate_always_false() -> None:
 def test_predicate_always_true_equals_all_pairs() -> None:
     left = [1, 2, 3]
     right = [4, 5]
-    fn = predicate_block(lambda l, r: True)
+    fn = predicate_block(lambda _left_item, _right_item: True)
     result = set(fn(left, right))
     assert result == _all_index_pairs(left, right)
 
@@ -189,7 +191,7 @@ def test_predicate_always_true_equals_all_pairs() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_predicate_equality() -> None:
-    fn = predicate_block(lambda l, r: l == r)
+    fn = predicate_block(operator.eq)
     result = set(fn([1, 2, 3], [3, 1, 4]))
     assert result == {(0, 1), (2, 0)}
 
@@ -197,12 +199,12 @@ def test_predicate_equality() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_predicate_numeric_range() -> None:
-    fn = predicate_block(lambda l, r: abs(l - r) <= 1)
+    fn = predicate_block(lambda left_item, right_item: abs(left_item - right_item) <= 1)
     left = [0, 5, 10]
     right = [1, 6, 20]
     result = set(fn(left, right))
-    assert (0, 0) in result   # |0-1| = 1 ✓
-    assert (1, 1) in result   # |5-6| = 1 ✓
+    assert (0, 0) in result  # |0-1| = 1 ✓
+    assert (1, 1) in result  # |5-6| = 1 ✓
     assert (2, 2) not in result  # |10-20| = 10 ✗
 
 
@@ -214,7 +216,7 @@ def test_predicate_recall() -> None:
     # Spot-check a known-correct subset: (1,0), (1,2), (3,1).
     left = [1, 2, 3, 4]
     right = [2, 4, 6]
-    fn = predicate_block(lambda l, r: l % 2 == r % 2)
+    fn = predicate_block(lambda left_item, right_item: left_item % 2 == right_item % 2)
     known_correct = {(1, 0), (1, 2), (3, 1)}
     candidates = set(fn(left, right))
     assert _recall_ok(candidates, known_correct)
@@ -238,8 +240,8 @@ def test_compose_union_single_fn_identity() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_compose_union_two_fns_superset() -> None:
-    fn_a = key_equality_block(lambda x: x[0])  # first character
-    fn_b = key_equality_block(lambda x: x[-1])  # last character
+    fn_a = key_equality_block(operator.itemgetter(0))  # first character
+    fn_b = key_equality_block(operator.itemgetter(-1))  # last character
     composed = compose_blocks(fn_a, fn_b, mode="union")
     left = ["ab", "cd"]
     right = ["ad", "cb"]
@@ -254,7 +256,7 @@ def test_compose_union_two_fns_superset() -> None:
 def test_compose_union_no_duplicates() -> None:
     # Both blockers yield the same pairs; union should deduplicate.
     fn = key_equality_block(lambda x: x)
-    composed = compose_blocks(fn, fn, mode="union")
+    compose_blocks(fn, fn, mode="union")
     left = ["a", "b"]
     right = ["a", "b"]
     result = list(compose_blocks(fn, fn, mode="union")(left, right))
@@ -265,7 +267,7 @@ def test_compose_union_no_duplicates() -> None:
 @pytest.mark.small
 def test_compose_union_recall() -> None:
     fn_a = key_equality_block(lambda x: x % 2)
-    fn_b = predicate_block(lambda l, r: l == r)
+    fn_b = predicate_block(operator.eq)
     composed = compose_blocks(fn_a, fn_b, mode="union")
     left = [1, 2, 3]
     right = [1, 3, 5]
@@ -293,7 +295,7 @@ def test_compose_intersection_single_fn_identity() -> None:
 @pytest.mark.small
 def test_compose_intersection_is_subset_of_each() -> None:
     fn_a = key_equality_block(lambda x: x % 2)
-    fn_b = predicate_block(lambda l, r: abs(l - r) <= 2)
+    fn_b = predicate_block(lambda left_item, right_item: abs(left_item - right_item) <= 2)
     composed = compose_blocks(fn_a, fn_b, mode="intersection")
     left = [1, 2, 3, 4]
     right = [1, 2, 5]
@@ -305,8 +307,8 @@ def test_compose_intersection_is_subset_of_each() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_compose_intersection_empty_when_disjoint() -> None:
-    fn_a = key_equality_block(lambda x: x)     # identity key
-    fn_b = predicate_block(lambda l, r: False)  # never
+    fn_a = key_equality_block(lambda x: x)  # identity key
+    fn_b = predicate_block(lambda _left_item, _right_item: False)  # never
     composed = compose_blocks(fn_a, fn_b, mode="intersection")
     assert _pairs(composed, [1, 2], [1, 2]) == set()
 
@@ -353,7 +355,7 @@ def test_key_equality_returns_blocking_fn() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_predicate_returns_blocking_fn() -> None:
-    fn: BlockingFn = predicate_block(lambda l, r: l == r)
+    fn: BlockingFn = predicate_block(operator.eq)
     assert callable(fn)
 
 

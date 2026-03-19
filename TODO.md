@@ -17,17 +17,17 @@
 
 ## ~~Final step — Public API (`src/scohthwang/__init__.py`)~~ ✓ complete
 
-## Follow-up — Contract and Release Gaps
+## ~~Follow-up — Contract and Release Gaps~~ ✓ complete
 
-- [ ] resolve packaging metadata drift: either add `src/scohthwang/cli.py` for the published `scohthwang` console script or remove the broken entry point from `pyproject.toml`
-- [ ] fix `tool.mutmut.paths_to_mutate` in `pyproject.toml`; it still points at stale `src/wrixlere` instead of this package
-- [ ] decide and codify `hungarian_with_unmatched()` semantics for square matrices: either implement true opt-out unmatched behavior or narrow the public contract and README to the current dummy-padding behavior
-- [ ] add contract tests for assignment semantics, including square-matrix unmatched behavior and blocked `match_within_group()` cases that currently force `LARGE_COST` pairings in square groups
-- [ ] fix `infer_offset_from_sequences()` so zero-comparison scans return `offset=None`, matching its docstring and public contract
-- [ ] add contract tests for offset inference when every candidate offset has zero comparable pairs
-- [ ] define flexible matching cost semantics explicitly: ensure `_flexible_intermediate()` reports costs consistent with the objective used to choose group assignments
-- [ ] decide whether flexible leaf matching should keep positional element pairing or switch to true inner matching; document and test the chosen behavior
-- [ ] align `make_canonicalizer()` error behavior and docs so missing fields raise the documented exception type, or update the docs to match `AttributeError`
-- [ ] add a public-surface contract test that `scohthwang.__init__` exports exactly the symbols listed in `__all__`
-- [ ] add a packaging smoke test that builds/installs the wheel, imports `scohthwang`, and exercises any published console entry points
-- [ ] audit runtime dependencies in `pyproject.toml`; move test-only packages such as `pytest-asyncio` out of `[project.dependencies]` if they are not part of the library runtime
+- [x] resolve packaging metadata drift: either add `src/scohthwang/cli.py` for the published `scohthwang` console script or remove the broken entry point from `pyproject.toml`
+- [x] fix `tool.mutmut.paths_to_mutate` in `pyproject.toml`; it still points at stale `src/wrixlere` instead of this package
+- [x] decide and codify `hungarian_with_unmatched()` semantics for square matrices: either implement true opt-out unmatched behavior or narrow the public contract and README to the current dummy-padding behavior
+- [x] add contract tests for assignment semantics, including square-matrix unmatched behavior and blocked `match_within_group()` cases that currently force `LARGE_COST` pairings in square groups
+- [x] fix `infer_offset_from_sequences()` so zero-comparison scans return `offset=None`, matching its docstring and public contract
+- [x] add contract tests for offset inference when every candidate offset has zero comparable pairs
+- [x] define flexible matching cost semantics explicitly: ensure `_flexible_intermediate()` reports costs consistent with the objective used to choose group assignments
+- [x] decide whether flexible leaf matching should keep positional element pairing or switch to true inner matching; document and test the chosen behavior
+- [x] align `make_canonicalizer()` error behavior and docs so missing fields raise the documented exception type, or update the docs to match `AttributeError`
+- [x] add a public-surface contract test that `scohthwang.__init__` exports exactly the symbols listed in `__all__`
+- [x] add a packaging smoke test that builds/installs the wheel, imports `scohthwang`, and exercises any published console entry points
+- [x] audit runtime dependencies in `pyproject.toml`; move test-only packages such as `pytest-asyncio` out of `[project.dependencies]` if they are not part of the library runtime

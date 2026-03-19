@@ -175,13 +175,11 @@ def test_unmatched_1x1_matched() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_unmatched_1x1_square_forces_match() -> None:
-    # unmatched_cost only applies to size-difference dummies.  A square 1x1
-    # matrix has no room for dummies, so the single pair is always matched
-    # regardless of how large the pair cost is relative to unmatched_cost.
+    # Square matrices can now opt out via explicit dummy assignments.
     cost = [[3.0]]
     result, total = hungarian_with_unmatched(cost, unmatched_cost=1.0)
-    assert result == [0]
-    assert total == pytest.approx(3.0)
+    assert result == [None]
+    assert total == pytest.approx(2.0)
 
 
 @pytest.mark.unit
@@ -226,12 +224,11 @@ def test_unmatched_more_right_than_left() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_unmatched_square_always_fully_matched() -> None:
-    # unmatched_cost is a dummy-padding cost; a square matrix forces all elements
-    # to be matched even if every pair cost exceeds unmatched_cost.
+    # Square matrices can leave both sides unmatched when every real pair is worse.
     cost = [[5.0, 5.0], [5.0, 5.0]]
     result, total = hungarian_with_unmatched(cost, unmatched_cost=1.0)
-    assert None not in result
-    assert total == pytest.approx(10.0)
+    assert result == [None, None]
+    assert total == pytest.approx(4.0)
 
 
 @pytest.mark.unit

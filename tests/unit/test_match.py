@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import operator
+
 import pytest
 
 from scohthwang.match import Level, group_and_match, hierarchical_match, match_within_group
@@ -14,20 +16,20 @@ from scohthwang.models import LARGE_COST, MatchResult
 _LARGE = LARGE_COST
 
 
-def _identity_cost(l: float, r: float) -> float:
-    return abs(l - r)
+def _identity_cost(left_value: float, right_value: float) -> float:
+    return float(abs(left_value - right_value))
 
 
-def _zero_cost(l: object, r: object) -> float:  # noqa: ARG001
+def _zero_cost(_left_value: object, _right_value: object) -> float:
     return 0.0
 
 
-def _all_large(l: object, r: object) -> float:  # noqa: ARG001
+def _all_large(_left_value: object, _right_value: object) -> float:
     return _LARGE
 
 
-def _char_cost(l: str, r: str) -> float:
-    return 0.0 if l == r else _LARGE
+def _char_cost(left_value: str, right_value: str) -> float:
+    return 0.0 if left_value == right_value else _LARGE
 
 
 def _matched_pairs(result: MatchResult) -> set[tuple[int, int]]:
@@ -35,11 +37,7 @@ def _matched_pairs(result: MatchResult) -> set[tuple[int, int]]:
 
 
 def _total_elements(result: MatchResult) -> int:
-    return (
-        len(result.pairs) * 2
-        + len(result.unmatched_left)
-        + len(result.unmatched_right)
-    )
+    return len(result.pairs) * 2 + len(result.unmatched_left) + len(result.unmatched_right)
 
 
 # ---------------------------------------------------------------------------
@@ -105,15 +103,14 @@ def test_match_optimal_assignment() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_match_extra_left_elements_become_unmatched() -> None:
-    # 3 left elements, 2 right — the extra left element must be unmatched.
-    # The square matrix has a dummy column at unmatched_cost; the algorithm
-    # routes one left element there.
+    # If every real pair is more expensive than unmatched_cost, both sides opt out.
     left = ["a", "b", "c"]
     right = ["x", "y"]
     r = match_within_group(left, right, _all_large, unmatched_cost=1.0)
-    assert len(r.unmatched_left) == 1
-    assert r.unmatched_right == []
-    assert len(r.pairs) == 2
+    assert r.pairs == []
+    assert r.unmatched_left == [0, 1, 2]
+    assert r.unmatched_right == [0, 1]
+    assert r.total_cost == pytest.approx(5.0)
 
 
 @pytest.mark.unit
@@ -126,7 +123,8 @@ def test_match_rectangular_more_left() -> None:
     assert len(r.unmatched_left) == 1
     assert r.unmatched_right == []
     assert 100 in left  # sanity: 100.0 is the odd one out
-    assert 2 in [left[i] for i in r.unmatched_left] or 100.0 in [left[i] for i in r.unmatched_left]
+    unmatched_values = [left[i] for i in r.unmatched_left]
+    assert 2 in unmatched_values or 100.0 in unmatched_values
 
 
 @pytest.mark.unit
@@ -177,7 +175,7 @@ def test_match_with_block_fn_filters_pairs() -> None:
 
     left = [0.0, 10.0]
     right = [0.0, 10.0]
-    block_fn = predicate_block(lambda l, r: l == r)
+    block_fn = predicate_block(operator.eq)
     r = match_within_group(left, right, _identity_cost, unmatched_cost=100.0, block_fn=block_fn)
     assert _matched_pairs(r) == {(0, 0), (1, 1)}
     assert r.total_cost == pytest.approx(0.0)
@@ -191,7 +189,7 @@ def test_match_block_fn_avoids_wrong_pairs() -> None:
 
     left = [1.0, 10.0]
     right = [10.0, 1.0]
-    block_fn = predicate_block(lambda l, r: l == r)
+    block_fn = predicate_block(operator.eq)
     r = match_within_group(left, right, _identity_cost, unmatched_cost=100.0, block_fn=block_fn)
     assert _matched_pairs(r) == {(0, 1), (1, 0)}
     assert r.total_cost == pytest.approx(0.0)
@@ -207,9 +205,15 @@ def test_match_block_fn_avoids_wrong_pairs() -> None:
 def test_group_and_match_same_keys() -> None:
     left = [("A", 1.0), ("B", 2.0), ("A", 3.0)]
     right = [("A", 1.5), ("B", 2.5)]
-    cost_fn = lambda l, r: abs(l[1] - r[1])  # noqa: E731
+    cost_fn = lambda left_item, right_item: abs(left_item[1] - right_item[1])  # noqa: E731
 
-    results = group_and_match(left, right, key_fn=lambda x: x[0], cost_fn=cost_fn, unmatched_cost=10.0)
+    results = group_and_match(
+        left,
+        right,
+        key_fn=operator.itemgetter(0),
+        cost_fn=cost_fn,
+        unmatched_cost=10.0,
+    )
 
     assert set(results.keys()) == {"A", "B"}
     # Group A: left=[0->(A,1), 1->(A,3)], right=[0->(A,1.5)]; one match, one unmatched_left.
@@ -223,7 +227,13 @@ def test_group_and_match_same_keys() -> None:
 def test_group_and_match_disjoint_keys() -> None:
     left = [("A", 1.0)]
     right = [("B", 2.0)]
-    results = group_and_match(left, right, key_fn=lambda x: x[0], cost_fn=_zero_cost, unmatched_cost=5.0)
+    results = group_and_match(
+        left,
+        right,
+        key_fn=operator.itemgetter(0),
+        cost_fn=_zero_cost,
+        unmatched_cost=5.0,
+    )
 
     assert set(results.keys()) == {"A", "B"}
     assert results["A"].pairs == []
@@ -245,7 +255,13 @@ def test_group_and_match_indices_are_group_relative() -> None:
     # Group "A" has 2 left elements.  Indices should be 0 and 1, not original list indices.
     left = [("A", 10.0), ("A", 20.0)]
     right = [("A", 10.5), ("A", 20.5)]
-    results = group_and_match(left, right, key_fn=lambda x: x[0], cost_fn=lambda l, r: abs(l[1] - r[1]), unmatched_cost=5.0)
+    results = group_and_match(
+        left,
+        right,
+        key_fn=operator.itemgetter(0),
+        cost_fn=lambda left_item, right_item: abs(left_item[1] - right_item[1]),
+        unmatched_cost=5.0,
+    )
     a = results["A"]
     for li, ri in a.pairs:
         assert 0 <= li < 2
@@ -275,8 +291,8 @@ def test_hierarchical_single_level_strict_perfect_match() -> None:
     left = [("A", 1.0), ("B", 2.0)]
     right = [("A", 1.0), ("B", 2.0)]
     level = Level(
-        key_fn=lambda x: x[0],
-        cost_fn=lambda l, r: abs(l[1] - r[1]),
+        key_fn=operator.itemgetter(0),
+        cost_fn=lambda left_item, right_item: abs(left_item[1] - right_item[1]),
         unmatched_cost=10.0,
         mode="strict",
     )
@@ -293,16 +309,16 @@ def test_hierarchical_single_level_strict_unmatched_key() -> None:
     left = [("A", 1.0), ("C", 3.0)]
     right = [("A", 1.0), ("B", 2.0)]
     level = Level(
-        key_fn=lambda x: x[0],
-        cost_fn=lambda l, r: abs(l[1] - r[1]),
+        key_fn=operator.itemgetter(0),
+        cost_fn=lambda left_item, right_item: abs(left_item[1] - right_item[1]),
         unmatched_cost=5.0,
         mode="strict",
     )
     r = hierarchical_match(left, right, [level])
     # ("C", 3.0) and ("B", 2.0) have no counterpart — both unmatched.
-    assert len(r.unmatched_left) == 1   # the "C" element
+    assert len(r.unmatched_left) == 1  # the "C" element
     assert len(r.unmatched_right) == 1  # the "B" element
-    assert len(r.pairs) == 1            # the "A" match
+    assert len(r.pairs) == 1  # the "A" match
     assert r.total_cost == pytest.approx(0.0 + 5.0 + 5.0)
 
 
@@ -319,7 +335,7 @@ def test_hierarchical_single_level_strict_empty() -> None:
 def test_hierarchical_single_level_strict_only_left() -> None:
     left = [("A", 1.0), ("A", 2.0)]
     right: list = []
-    level = Level(key_fn=lambda x: x[0], cost_fn=_zero_cost, unmatched_cost=3.0)
+    level = Level(key_fn=operator.itemgetter(0), cost_fn=_zero_cost, unmatched_cost=3.0)
     r = hierarchical_match(left, right, [level])
     assert r.pairs == []
     assert set(r.unmatched_left) == {0, 1}
@@ -330,18 +346,14 @@ def test_hierarchical_single_level_strict_only_left() -> None:
 @pytest.mark.small
 def test_hierarchical_single_level_flexible_assigns_groups() -> None:
     # Two left groups (keyed "A" and "B") and two right groups (keyed "X" and "Y").
-    # In flexible leaf mode, cost_fn receives element LISTS for group-to-group
-    # scoring; elements within matched group pairs are then paired positionally.
+    # In flexible leaf mode, cost_fn is element-level; group costs are derived
+    # by matching the elements inside each candidate group pair.
     left = [("A", 1.0), ("B", 10.0)]
     right = [("X", 1.1), ("Y", 50.0)]
 
-    def group_cost(l_group: list, r_group: list) -> float:
-        """Sum of positional absolute differences between group elements."""
-        return sum(abs(le[1] - re[1]) for le, re in zip(l_group, r_group, strict=False))
-
     level = Level(
-        key_fn=lambda x: x[0],
-        cost_fn=group_cost,
+        key_fn=operator.itemgetter(0),
+        cost_fn=lambda left_item, right_item: abs(left_item[1] - right_item[1]),
         unmatched_cost=50.0,
         mode="flexible",
     )
@@ -353,6 +365,26 @@ def test_hierarchical_single_level_flexible_assigns_groups() -> None:
     assert r.unmatched_right == []
     # "A"↔"X" cost = |1.0-1.1|=0.1 should be preferred over "A"↔"Y" cost=49.
     assert r.total_cost == pytest.approx(0.1 + 40.0)
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_hierarchical_single_level_flexible_uses_true_inner_matching() -> None:
+    left = [("A", "x", 1.0), ("A", "y", 9.0), ("B", "z", 50.0)]
+    right = [("X", "y", 9.0), ("X", "x", 1.0), ("Y", "z", 49.0)]
+    level = Level(
+        key_fn=operator.itemgetter(0),
+        cost_fn=lambda left_item, right_item: abs(left_item[2] - right_item[2]),
+        unmatched_cost=10.0,
+        mode="flexible",
+    )
+
+    result = hierarchical_match(left, right, [level])
+
+    assert set(result.pairs) == {(0, 1), (1, 0), (2, 2)}
+    assert result.unmatched_left == []
+    assert result.unmatched_right == []
+    assert result.total_cost == pytest.approx(1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -376,14 +408,14 @@ def test_hierarchical_two_levels_strict_strict() -> None:
         ("B", "H", 8.1),
     ]
     chain_level = Level(
-        key_fn=lambda x: x[0],
-        cost_fn=_zero_cost,   # unused at intermediate strict level
+        key_fn=operator.itemgetter(0),
+        cost_fn=_zero_cost,  # unused at intermediate strict level
         unmatched_cost=100.0,
         mode="strict",
     )
     atom_level = Level(
-        key_fn=lambda x: x[1],
-        cost_fn=lambda l, r: abs(l[2] - r[2]),
+        key_fn=operator.itemgetter(1),
+        cost_fn=lambda left_item, right_item: abs(left_item[2] - right_item[2]),
         unmatched_cost=10.0,
         mode="strict",
     )
@@ -400,17 +432,17 @@ def test_hierarchical_two_levels_strict_unmatched_chain() -> None:
     left = [("A", "H", 7.0), ("C", "H", 9.0)]
     right = [("A", "H", 7.5), ("B", "H", 8.0)]
 
-    chain_level = Level(key_fn=lambda x: x[0], cost_fn=_zero_cost, unmatched_cost=20.0)
+    chain_level = Level(key_fn=operator.itemgetter(0), cost_fn=_zero_cost, unmatched_cost=20.0)
     atom_level = Level(
-        key_fn=lambda x: x[1],
-        cost_fn=lambda l, r: abs(l[2] - r[2]),
+        key_fn=operator.itemgetter(1),
+        cost_fn=lambda left_item, right_item: abs(left_item[2] - right_item[2]),
         unmatched_cost=10.0,
     )
     r = hierarchical_match(left, right, [chain_level, atom_level])
     # ("C", ...) and ("B", ...) are unmatched chains → their H atoms are unmatched.
-    assert len(r.unmatched_left) == 1   # "C"'s H
+    assert len(r.unmatched_left) == 1  # "C"'s H
     assert len(r.unmatched_right) == 1  # "B"'s H
-    assert len(r.pairs) == 1            # "A"'s H
+    assert len(r.pairs) == 1  # "A"'s H
     assert r.total_cost == pytest.approx(0.5 + 20.0 + 20.0)
 
 
@@ -421,15 +453,15 @@ def test_hierarchical_two_levels_inner_atom_mismatch() -> None:
     left = [("A", "H", 7.0), ("A", "C", 120.0)]
     right = [("A", "H", 7.1)]
 
-    chain_level = Level(key_fn=lambda x: x[0], cost_fn=_zero_cost, unmatched_cost=100.0)
+    chain_level = Level(key_fn=operator.itemgetter(0), cost_fn=_zero_cost, unmatched_cost=100.0)
     atom_level = Level(
-        key_fn=lambda x: x[1],
-        cost_fn=lambda l, r: abs(l[2] - r[2]),
+        key_fn=operator.itemgetter(1),
+        cost_fn=lambda left_item, right_item: abs(left_item[2] - right_item[2]),
         unmatched_cost=5.0,
     )
     r = hierarchical_match(left, right, [chain_level, atom_level])
-    assert len(r.pairs) == 1       # H matched
-    assert len(r.unmatched_left) == 1   # C unmatched
+    assert len(r.pairs) == 1  # H matched
+    assert len(r.unmatched_left) == 1  # C unmatched
     assert r.unmatched_right == []
     assert r.total_cost == pytest.approx(0.1 + 5.0)
 
@@ -445,8 +477,8 @@ def test_hierarchical_covers_all_indices() -> None:
     left = [("A", i) for i in range(3)]
     right = [("A", i) for i in range(4)]
     level = Level(
-        key_fn=lambda x: x[0],
-        cost_fn=lambda l, r: abs(l[1] - r[1]),
+        key_fn=operator.itemgetter(0),
+        cost_fn=lambda left_item, right_item: abs(left_item[1] - right_item[1]),
         unmatched_cost=1.0,
     )
     r = hierarchical_match(left, right, [level])
@@ -463,10 +495,10 @@ def test_hierarchical_covers_all_indices() -> None:
 def test_hierarchical_two_levels_covers_all_indices() -> None:
     left = [("A", "H", i) for i in range(3)] + [("B", "C", i) for i in range(2)]
     right = [("A", "H", i) for i in range(2)] + [("B", "N", i) for i in range(2)]
-    chain_level = Level(key_fn=lambda x: x[0], cost_fn=_zero_cost, unmatched_cost=5.0)
+    chain_level = Level(key_fn=operator.itemgetter(0), cost_fn=_zero_cost, unmatched_cost=5.0)
     atom_level = Level(
-        key_fn=lambda x: x[1],
-        cost_fn=lambda l, r: abs(l[2] - r[2]),
+        key_fn=operator.itemgetter(1),
+        cost_fn=lambda left_item, right_item: abs(left_item[2] - right_item[2]),
         unmatched_cost=2.0,
     )
     r = hierarchical_match(left, right, [chain_level, atom_level])
@@ -500,17 +532,42 @@ def test_hierarchical_flexible_intermediate_cross_key_assignment() -> None:
         return total
 
     chain_level = Level(
-        key_fn=lambda x: x[0],
+        key_fn=operator.itemgetter(0),
         cost_fn=group_cost,
         unmatched_cost=100.0,
         mode="flexible",
     )
     atom_level = Level(
         key_fn=lambda _: 0,  # all atoms in same sub-group
-        cost_fn=lambda l, r: abs(l[1] - r[1]),
+        cost_fn=lambda left_item, right_item: abs(left_item[1] - right_item[1]),
         unmatched_cost=5.0,
     )
     r = hierarchical_match(left, right, [chain_level, atom_level])
     # All 6 elements must be accounted for.
     assert _total_elements(r) == 6
     assert r.total_cost >= 0.0
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_hierarchical_flexible_intermediate_reports_objective_cost() -> None:
+    left = [("A", 0.0), ("B", 100.0)]
+    right = [("X", 1.0), ("Y", 99.0)]
+    chain_level = Level(
+        key_fn=operator.itemgetter(0),
+        cost_fn=lambda left_group, right_group: abs(left_group[0][1] - right_group[0][1]) + 5.0,
+        unmatched_cost=50.0,
+        mode="flexible",
+    )
+    atom_level = Level(
+        key_fn=lambda _item: 0,
+        cost_fn=lambda left_item, right_item: abs(left_item[1] - right_item[1]),
+        unmatched_cost=10.0,
+    )
+
+    result = hierarchical_match(left, right, [chain_level, atom_level])
+
+    assert set(result.pairs) == {(0, 0), (1, 1)}
+    assert result.unmatched_left == []
+    assert result.unmatched_right == []
+    assert result.total_cost == pytest.approx(6.0 + 6.0)
