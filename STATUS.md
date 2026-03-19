@@ -2,7 +2,7 @@
 
 ## Current focus
 
-Phase 4 complete. Next: Phase 5 (`block.py`) and Phase 6 (`match.py`) — independent after Phase 5 defines `BlockingFn`.
+Phase 6 complete. Next: Phase 7 (`canonicalize.py`) and public API (`__init__.py`).
 
 ## Current state summary
 
@@ -11,7 +11,9 @@ Phase 4 complete. Next: Phase 5 (`block.py`) and Phase 6 (`match.py`) — indepe
 - `assign.py` implemented and fully tested (22 unit tests).
 - `align.py` implemented and fully tested (28 unit tests including 1 property-based); bvp-cs migration notes updated.
 - `score.py` implemented and fully tested (20 unit tests); bvp-cs migration notes updated.
-- Remaining source modules (`canonicalize.py`, `block.py`, `match.py`) are empty stubs.
+- `block.py` implemented and fully tested (33 unit tests).
+- `match.py` implemented and fully tested (28 unit tests).
+- Remaining source module `canonicalize.py` is an empty stub; `__init__.py` is empty pending Phase 7.
 - Tooling (ruff, ty, pytest, uv) fully configured and functional.
 - DESIGN.md, PLAN.md, TODO.md, and README.md reflect the current intended design.
 
