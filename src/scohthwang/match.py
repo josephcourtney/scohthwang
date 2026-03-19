@@ -6,6 +6,8 @@ Public API
 - :func:`match_within_group` — flat optimal assignment within a single candidate set.
 - :func:`group_and_match` — group both sides by a key function then match within groups.
 - :func:`hierarchical_match` — multi-level recursive grouping and matching.
+- :func:`materialize_match_result` — map a generic :class:`MatchResult` into domain records.
+- :func:`hierarchical_match_materialized` — run hierarchical matching and materialize the result.
 
 Design
 ------
@@ -66,7 +68,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
 from scohthwang.assign import hungarian_with_unmatched
-from scohthwang.models import LARGE_COST, MatchResult
+from scohthwang.models import LARGE_COST, MatchResult, MaterializedMatchResult
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
@@ -271,6 +273,31 @@ def _build_flexible_intermediate_costs(
 # ---------------------------------------------------------------------------
 
 
+def materialize_match_result[MatchedT, UnmatchedLeftT, UnmatchedRightT](
+    left: Sequence[Any],
+    right: Sequence[Any],
+    result: MatchResult,
+    *,
+    pair_fn: Callable[[Any, Any, int, int], MatchedT],
+    unmatched_left_fn: Callable[[Any, int], UnmatchedLeftT],
+    unmatched_right_fn: Callable[[Any, int], UnmatchedRightT],
+) -> MaterializedMatchResult[MatchedT, UnmatchedLeftT, UnmatchedRightT]:
+    """Map a generic index-based match result into domain-specific records."""
+    return MaterializedMatchResult(
+        matched=[
+            pair_fn(left[left_index], right[right_index], left_index, right_index)
+            for left_index, right_index in result.pairs
+        ],
+        unmatched_left=[
+            unmatched_left_fn(left[left_index], left_index) for left_index in result.unmatched_left
+        ],
+        unmatched_right=[
+            unmatched_right_fn(right[right_index], right_index) for right_index in result.unmatched_right
+        ],
+        total_cost=result.total_cost,
+    )
+
+
 def match_within_group(
     left: Sequence[Any],
     right: Sequence[Any],
@@ -461,6 +488,26 @@ def hierarchical_match(
     if level.mode == "strict":
         return _strict_intermediate(left_groups, right_groups, remaining, level.unmatched_cost)
     return _flexible_intermediate(left_groups, right_groups, level, remaining)
+
+
+def hierarchical_match_materialized[MatchedT, UnmatchedLeftT, UnmatchedRightT](
+    left: Sequence[Any],
+    right: Sequence[Any],
+    levels: Sequence[Level],
+    *,
+    pair_fn: Callable[[Any, Any, int, int], MatchedT],
+    unmatched_left_fn: Callable[[Any, int], UnmatchedLeftT],
+    unmatched_right_fn: Callable[[Any, int], UnmatchedRightT],
+) -> MaterializedMatchResult[MatchedT, UnmatchedLeftT, UnmatchedRightT]:
+    """Run :func:`hierarchical_match` and materialize the resulting indices."""
+    return materialize_match_result(
+        left,
+        right,
+        hierarchical_match(left, right, levels),
+        pair_fn=pair_fn,
+        unmatched_left_fn=unmatched_left_fn,
+        unmatched_right_fn=unmatched_right_fn,
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -32,6 +32,24 @@ Items should be categorized under these headings:
 
 ### Security
 
+## [0.2.0] - 2026-03-19
+
+### Added
+- add `OffsetScanCandidate`, `OffsetScanReport`, `infer_offset_from_sequences_detailed()`, and `infer_best_offset_from_sequences_detailed()` for detailed offset-scan reporting
+- add `CategoricalFieldCost` so pair scoring can express categorical, synonym-aware, and normalized mismatch penalties alongside numeric field costs
+- add `MaterializedMatchResult`, `materialize_match_result()`, and `hierarchical_match_materialized()` so callers can map generic matches into domain result rows without reimplementing orchestration
+
+### Changed
+- change the public facade to export the new detailed offset, categorical scoring, and materialized matching APIs
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
 ## [0.1.0] - 2026-03-19
 
 ### Added

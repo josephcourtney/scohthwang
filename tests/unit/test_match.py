@@ -6,7 +6,14 @@ import operator
 
 import pytest
 
-from scohthwang.match import Level, group_and_match, hierarchical_match, match_within_group
+from scohthwang.match import (
+    Level,
+    group_and_match,
+    hierarchical_match,
+    hierarchical_match_materialized,
+    match_within_group,
+    materialize_match_result,
+)
 from scohthwang.models import LARGE_COST, MatchResult
 
 # ---------------------------------------------------------------------------
@@ -571,3 +578,71 @@ def test_hierarchical_flexible_intermediate_reports_objective_cost() -> None:
     assert result.unmatched_left == []
     assert result.unmatched_right == []
     assert result.total_cost == pytest.approx(6.0 + 6.0)
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_materialize_match_result_maps_indices_to_domain_records() -> None:
+    result = MatchResult(pairs=[(0, 1)], unmatched_left=[1], unmatched_right=[0], total_cost=4.5)
+    left = ["L0", "L1"]
+    right = ["R0", "R1"]
+
+    materialized = materialize_match_result(
+        left,
+        right,
+        result,
+        pair_fn=lambda left_item, right_item, left_index, right_index: (
+            left_item,
+            right_item,
+            left_index,
+            right_index,
+        ),
+        unmatched_left_fn=lambda left_item, left_index: (left_item, left_index),
+        unmatched_right_fn=lambda right_item, right_index: (right_item, right_index),
+    )
+
+    assert materialized.matched == [("L0", "R1", 0, 1)]
+    assert materialized.unmatched_left == [("L1", 1)]
+    assert materialized.unmatched_right == [("R0", 0)]
+    assert materialized.total_cost == pytest.approx(4.5)
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_hierarchical_match_materialized_uses_hierarchical_pairs() -> None:
+    left = [("A", 1.0), ("B", 2.0)]
+    right = [("A", 1.1), ("C", 9.0)]
+    levels = [
+        Level(
+            key_fn=operator.itemgetter(0),
+            cost_fn=lambda left_item, right_item: abs(left_item[1] - right_item[1]),
+            unmatched_cost=5.0,
+            mode="strict",
+        )
+    ]
+
+    materialized = hierarchical_match_materialized(
+        left,
+        right,
+        levels,
+        pair_fn=lambda left_item, right_item, left_index, right_index: {
+            "left": left_item,
+            "right": right_item,
+            "left_index": left_index,
+            "right_index": right_index,
+        },
+        unmatched_left_fn=lambda left_item, left_index: {"left": left_item, "left_index": left_index},
+        unmatched_right_fn=lambda right_item, right_index: {"right": right_item, "right_index": right_index},
+    )
+
+    assert materialized.matched == [
+        {
+            "left": ("A", 1.0),
+            "right": ("A", 1.1),
+            "left_index": 0,
+            "right_index": 0,
+        }
+    ]
+    assert materialized.unmatched_left == [{"left": ("B", 2.0), "left_index": 1}]
+    assert materialized.unmatched_right == [{"right": ("C", 9.0), "right_index": 1}]
+    assert materialized.total_cost == pytest.approx(10.1)

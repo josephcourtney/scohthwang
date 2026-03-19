@@ -11,7 +11,10 @@ from scohthwang.models import (
     AlignedPair,
     CostMatrix,
     MatchResult,
+    MaterializedMatchResult,
     OffsetInferenceResult,
+    OffsetScanCandidate,
+    OffsetScanReport,
 )
 
 # ---------------------------------------------------------------------------
@@ -163,3 +166,44 @@ def test_offset_inference_result_equality() -> None:
     a = OffsetInferenceResult(offset=1, agreement=0.9, compared=10, ambiguous=False)
     b = OffsetInferenceResult(offset=1, agreement=0.9, compared=10, ambiguous=False)
     assert a == b
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_offset_scan_candidate_construction() -> None:
+    candidate = OffsetScanCandidate(offset=2, agreement=0.75, compared=8)
+    assert candidate.offset == 2
+    assert candidate.agreement == pytest.approx(0.75)
+    assert candidate.compared == 8
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_offset_scan_report_construction() -> None:
+    candidate = OffsetScanCandidate(offset=0, agreement=1.0, compared=3)
+    report = OffsetScanReport(
+        result=OffsetInferenceResult(offset=0, agreement=1.0, compared=3, ambiguous=False),
+        candidates=[candidate],
+        best=candidate,
+        second_best=None,
+        offset_min=0,
+        offset_max=0,
+    )
+    assert report.best == candidate
+    assert report.offset_min == 0
+    assert report.offset_max == 0
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_materialized_match_result_construction() -> None:
+    result = MaterializedMatchResult(
+        matched=["matched"],
+        unmatched_left=["left"],
+        unmatched_right=["right"],
+        total_cost=2.5,
+    )
+    assert result.matched == ["matched"]
+    assert result.unmatched_left == ["left"]
+    assert result.unmatched_right == ["right"]
+    assert result.total_cost == pytest.approx(2.5)

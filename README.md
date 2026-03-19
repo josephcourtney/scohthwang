@@ -40,6 +40,8 @@ This pattern appears in many domains: comparing biological sequences at the resi
 
 **Offset-scan inference** — infer an integer offset Δ such that `right_index + Δ ≈ left_index` for a pair of indexed sequences. Robust to small sequence differences; reports ambiguity when multiple offsets score similarly.
 
+**Detailed offset-scan reporting** — inspect the full ranked candidate list, top-two offsets, and scanned range when reconciliation logic needs more than just the winning offset.
+
 ### Assignment (`assign`)
 
 **Hungarian algorithm** — solve the minimum-cost bipartite assignment problem. Supports rectangular and square cost matrices, and lets either side leave elements unmatched via a configurable unmatched cost that acts as a true opt-out threshold.
@@ -47,6 +49,8 @@ This pattern appears in many domains: comparing biological sequences at the resi
 ### Scoring (`score`)
 
 **Pair cost functions** — compute the cost of matching two elements. Hard constraints (incompatible elements receive a large sentinel cost) and soft penalties (difference in values, label mismatch, position difference) are combined with configurable weights.
+
+**Categorical penalties** — express synonym-aware or normalized categorical comparisons, such as atom-name aliases, without rewriting the whole pair-cost function.
 
 **Score composition** — a pair cost function can call a nested matching algorithm and return the optimal assignment cost as the score, enabling hierarchical matching.
 
@@ -59,6 +63,8 @@ This pattern appears in many domains: comparing biological sequences at the resi
 **Hierarchical matching** — group elements by a key (e.g., sequence position and label), then match within each group. Operates across one or more levels of nesting.
 
 **Strict and flexible modes** — strict mode requires key equality before matching. Flexible mode assigns groups by a cost objective: at the leaf it derives that objective from true element-level matching, and at intermediate levels it uses the level cost function directly.
+
+**Result materialization** — convert the generic index-based `MatchResult` into domain records after orchestration, so callers can build their own matched-row types without reimplementing the hierarchy walk.
 
 ### Canonicalization (`canonicalize`)
 
@@ -107,4 +113,4 @@ To run the validation suite:
 
 ## Project Status
 
-Alpha — `0.1.0`. The module structure is in place; implementations are being extracted and generalized from working domain-specific code in `bvp/packages/bvp-cs`. See `DESIGN.md` for the intended architecture and `PLAN.md` for implementation sequencing.
+Alpha — `0.2.0`. The module structure is in place; implementations are being extracted and generalized from working domain-specific code in `bvp/packages/bvp-cs`. See `DESIGN.md` for the intended architecture and `PLAN.md` for implementation sequencing.

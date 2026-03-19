@@ -7,6 +7,7 @@ Nothing here imports from other scohthwang modules.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypeVar
 
 # ---------------------------------------------------------------------------
 # Sentinel value
@@ -30,6 +31,10 @@ CostMatrix = list[list[float]]
 #: A single aligned position from a Needleman-Wunsch alignment.
 #: Either index may be ``None`` to represent a gap on that side.
 AlignedPair = tuple[int | None, int | None]
+
+MatchedT = TypeVar("MatchedT")
+UnmatchedLeftT = TypeVar("UnmatchedLeftT")
+UnmatchedRightT = TypeVar("UnmatchedRightT")
 
 
 # ---------------------------------------------------------------------------
@@ -83,3 +88,34 @@ class OffsetInferenceResult:
     agreement: float
     compared: int
     ambiguous: bool
+
+
+@dataclass(frozen=True)
+class OffsetScanCandidate:
+    """One scored offset candidate from an offset scan."""
+
+    offset: int
+    agreement: float
+    compared: int
+
+
+@dataclass(frozen=True)
+class OffsetScanReport:
+    """Detailed report for an offset scan across a bounded integer range."""
+
+    result: OffsetInferenceResult
+    candidates: list[OffsetScanCandidate]
+    best: OffsetScanCandidate | None
+    second_best: OffsetScanCandidate | None
+    offset_min: int | None
+    offset_max: int | None
+
+
+@dataclass(frozen=True)
+class MaterializedMatchResult[MatchedT, UnmatchedLeftT, UnmatchedRightT]:
+    """Domain-materialized view of a :class:`MatchResult`."""
+
+    matched: list[MatchedT]
+    unmatched_left: list[UnmatchedLeftT]
+    unmatched_right: list[UnmatchedRightT]
+    total_cost: float

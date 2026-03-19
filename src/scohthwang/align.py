@@ -4,6 +4,8 @@ Public API
 ----------
 - :func:`needleman_wunsch_alignment` — global alignment via Needleman-Wunsch DP.
 - :func:`infer_offset_from_sequences` — infer integer offset Δ from indexed sequences.
+- :func:`infer_offset_from_sequences_detailed` — detailed offset-scan report.
+- :func:`infer_best_offset_from_sequences_detailed` — compatibility alias for the detailed report.
 - :func:`infer_seq_offset` — higher-level wrapper accepting arbitrary element lists.
 
 Algorithms
@@ -22,16 +24,14 @@ Source
 ------
 Generalised from ``bvp_cs.algorithms.align`` in bvp/packages/bvp-cs.
 Domain-specific ``ShiftRow`` extraction replaced with a generic ``key_fn``
-parameter.  Return types changed from raw tuples to :class:`OffsetInferenceResult`.
-Logging removed.
+parameter.  Public detail reporting is available via :class:`OffsetScanReport`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from scohthwang.models import OffsetInferenceResult
+from scohthwang.models import OffsetInferenceResult, OffsetScanCandidate, OffsetScanReport
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
@@ -48,20 +48,6 @@ AMBIGUOUS_OFFSET_DELTA: float = 0.05
 
 _MIN_SECOND_BEST_COMPARABLE: int = 3
 _MIN_SECOND_BEST_SUPPORT_DENOMINATOR: int = 4
-
-
-# ---------------------------------------------------------------------------
-# Private types
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class _OffsetCandidate:
-    """Internal scored candidate from the offset scan."""
-
-    offset: int
-    agreement: float
-    compared: int
 
 
 # ---------------------------------------------------------------------------
@@ -153,8 +139,8 @@ def _traceback_alignment(
 
 def _is_ambiguous(
     *,
-    best: _OffsetCandidate | None,
-    second: _OffsetCandidate | None,
+    best: OffsetScanCandidate | None,
+    second: OffsetScanCandidate | None,
     ambiguous_delta: float,
 ) -> bool:
     """Return True when the runner-up offset is close enough to be concerning.
@@ -178,7 +164,7 @@ def _score_one_offset(
     left_map: dict[int, Hashable | None],
     right_map: dict[int, Hashable | None],
     offset: int,
-) -> _OffsetCandidate:
+) -> OffsetScanCandidate:
     """Score a single candidate offset by agreement fraction over comparable pairs.
 
     Pairs where either label is ``None`` are excluded from scoring.
@@ -195,10 +181,10 @@ def _score_one_offset(
         if right_label == label:
             matches += 1
     score = matches / total if total else 0.0
-    return _OffsetCandidate(offset=offset, agreement=score, compared=total)
+    return OffsetScanCandidate(offset=offset, agreement=score, compared=total)
 
 
-def _candidate_is_better(a: _OffsetCandidate, b: _OffsetCandidate | None) -> bool:
+def _candidate_is_better(a: OffsetScanCandidate, b: OffsetScanCandidate | None) -> bool:
     """Return True when candidate ``a`` is preferred over ``b``.
 
     Preference order: higher agreement, then larger compared, then smaller offset.
@@ -217,10 +203,10 @@ def _score_offsets_top2(
     right_map: dict[int, Hashable | None],
     offset_min: int,
     offset_max: int,
-) -> tuple[_OffsetCandidate | None, _OffsetCandidate | None]:
+) -> tuple[OffsetScanCandidate | None, OffsetScanCandidate | None]:
     """Return the best and second-best candidates for the given offset range."""
-    best: _OffsetCandidate | None = None
-    second: _OffsetCandidate | None = None
+    best: OffsetScanCandidate | None = None
+    second: OffsetScanCandidate | None = None
 
     for offset in range(offset_min, offset_max + 1):
         cand = _score_one_offset(left_map, right_map, offset)
@@ -238,6 +224,22 @@ def _score_offsets_top2(
             second = cand
 
     return best, second
+
+
+def _score_offsets_all(
+    left_map: dict[int, Hashable | None],
+    right_map: dict[int, Hashable | None],
+    offset_min: int,
+    offset_max: int,
+) -> list[OffsetScanCandidate]:
+    """Return all scored candidates sorted by scan preference order."""
+    candidates = [
+        _score_one_offset(left_map, right_map, offset) for offset in range(offset_min, offset_max + 1)
+    ]
+    return sorted(
+        candidates,
+        key=lambda candidate: (-candidate.agreement, -candidate.compared, candidate.offset),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -342,6 +344,34 @@ def infer_offset_from_sequences(
     if not left or not right:
         return OffsetInferenceResult(offset=None, agreement=0.0, compared=0, ambiguous=True)
 
+    report = infer_offset_from_sequences_detailed(
+        left,
+        right,
+        max_span=max_span,
+        ambiguous_delta=ambiguous_delta,
+    )
+    return report.result
+
+
+def infer_offset_from_sequences_detailed(
+    left: Sequence[tuple[int, Hashable | None]],
+    right: Sequence[tuple[int, Hashable | None]],
+    *,
+    max_span: int | None = None,
+    ambiguous_delta: float = AMBIGUOUS_OFFSET_DELTA,
+) -> OffsetScanReport:
+    """Return a detailed offset-scan report including ranked candidates."""
+    if not left or not right:
+        empty_result = OffsetInferenceResult(offset=None, agreement=0.0, compared=0, ambiguous=True)
+        return OffsetScanReport(
+            result=empty_result,
+            candidates=[],
+            best=None,
+            second_best=None,
+            offset_min=None,
+            offset_max=None,
+        )
+
     left_map: dict[int, Hashable | None] = dict(left)
     right_map: dict[int, Hashable | None] = dict(right)
 
@@ -354,18 +384,43 @@ def infer_offset_from_sequences(
         offset_min = max(offset_min, -max_span)
         offset_max = min(offset_max, max_span)
 
-    best, second = _score_offsets_top2(left_map, right_map, offset_min, offset_max)
-    if best is None:
-        return OffsetInferenceResult(offset=None, agreement=0.0, compared=0, ambiguous=True)
-    if best.compared == 0:
-        return OffsetInferenceResult(offset=None, agreement=0.0, compared=0, ambiguous=True)
+    candidates = _score_offsets_all(left_map, right_map, offset_min, offset_max)
+    best = candidates[0] if candidates else None
+    second = candidates[1] if len(candidates) > 1 else None
 
-    ambiguous = _is_ambiguous(best=best, second=second, ambiguous_delta=ambiguous_delta)
-    return OffsetInferenceResult(
-        offset=best.offset,
-        agreement=best.agreement,
-        compared=best.compared,
-        ambiguous=ambiguous,
+    if best is None or best.compared == 0:
+        result = OffsetInferenceResult(offset=None, agreement=0.0, compared=0, ambiguous=True)
+    else:
+        result = OffsetInferenceResult(
+            offset=best.offset,
+            agreement=best.agreement,
+            compared=best.compared,
+            ambiguous=_is_ambiguous(best=best, second=second, ambiguous_delta=ambiguous_delta),
+        )
+
+    return OffsetScanReport(
+        result=result,
+        candidates=candidates,
+        best=best,
+        second_best=second,
+        offset_min=offset_min,
+        offset_max=offset_max,
+    )
+
+
+def infer_best_offset_from_sequences_detailed(
+    left: Sequence[tuple[int, Hashable | None]],
+    right: Sequence[tuple[int, Hashable | None]],
+    *,
+    max_span: int | None = None,
+    ambiguous_delta: float = AMBIGUOUS_OFFSET_DELTA,
+) -> OffsetScanReport:
+    """Compatibility wrapper for callers expecting the bvp-cs detailed API."""
+    return infer_offset_from_sequences_detailed(
+        left,
+        right,
+        max_span=max_span,
+        ambiguous_delta=ambiguous_delta,
     )
 
 

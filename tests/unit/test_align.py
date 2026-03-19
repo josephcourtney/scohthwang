@@ -9,8 +9,14 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from hypothesis.database import InMemoryExampleDatabase
 
-from scohthwang.align import infer_offset_from_sequences, infer_seq_offset, needleman_wunsch_alignment
-from scohthwang.models import OffsetInferenceResult
+from scohthwang.align import (
+    infer_best_offset_from_sequences_detailed,
+    infer_offset_from_sequences,
+    infer_offset_from_sequences_detailed,
+    infer_seq_offset,
+    needleman_wunsch_alignment,
+)
+from scohthwang.models import OffsetInferenceResult, OffsetScanReport
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -273,6 +279,41 @@ def test_offset_max_span_restricts_range() -> None:
 def test_offset_returns_offset_inference_result() -> None:
     result = infer_offset_from_sequences([(1, "A")], [(1, "A")])
     assert isinstance(result, OffsetInferenceResult)
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_offset_detailed_returns_scan_report() -> None:
+    report = infer_offset_from_sequences_detailed([(3, "A"), (4, "B")], [(1, "A"), (2, "B")])
+    assert isinstance(report, OffsetScanReport)
+    assert report.result.offset == 2
+    assert report.best is not None
+    assert report.best.offset == 2
+    assert report.candidates[0] == report.best
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_offset_detailed_records_second_best_candidate() -> None:
+    left = [(1, "A"), (2, "B"), (3, "C")]
+    right = [(1, "A"), (2, "X"), (3, "C")]
+    report = infer_offset_from_sequences_detailed(left, right)
+    assert report.best is not None
+    assert report.second_best is not None
+    assert (
+        report.best.compared >= report.second_best.compared
+        or report.best.agreement >= report.second_best.agreement
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_offset_detailed_compatibility_alias_matches_primary_report() -> None:
+    left = [(5, "A")]
+    right = [(3, "A")]
+    primary = infer_offset_from_sequences_detailed(left, right)
+    compat = infer_best_offset_from_sequences_detailed(left, right)
+    assert compat == primary
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ import pytest
 
 from scohthwang.models import MatchResult
 from scohthwang.score import (
+    CategoricalFieldCost,
     ConstraintFn,
     PairCostConfig,
     PairCostFn,
@@ -201,6 +202,55 @@ def test_none_max_diff_never_triggers_large_cost() -> None:
     fn = make_pair_cost_fn(config)
     # Very large difference — no cap applied
     assert fn(0.0, 1_000_000.0) == pytest.approx(1_000_000.0)
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_categorical_cost_mismatch_penalty() -> None:
+    config = PairCostConfig(
+        categorical_costs=[
+            CategoricalFieldCost(
+                field_fn=operator.itemgetter("atom"),
+                mismatch_cost=4.0,
+            )
+        ]
+    )
+    fn = make_pair_cost_fn(config)
+    assert fn({"atom": "HA"}, {"atom": "HB"}) == pytest.approx(4.0)
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_categorical_cost_synonym_group_treated_as_match() -> None:
+    config = PairCostConfig(
+        categorical_costs=[
+            CategoricalFieldCost(
+                field_fn=operator.itemgetter("atom"),
+                mismatch_cost=10.0,
+                synonym_groups=[frozenset({"HB2", "HB3"})],
+            )
+        ]
+    )
+    fn = make_pair_cost_fn(config)
+    assert fn({"atom": "HB2"}, {"atom": "HB3"}) == pytest.approx(0.0)
+
+
+@pytest.mark.unit
+@pytest.mark.small
+def test_categorical_cost_normalizer_and_missing_penalty() -> None:
+    config = PairCostConfig(
+        categorical_costs=[
+            CategoricalFieldCost(
+                field_fn=operator.itemgetter("comp"),
+                mismatch_cost=5.0,
+                missing_cost=1.5,
+                normalize_fn=lambda value: str(value).strip().upper(),
+            )
+        ]
+    )
+    fn = make_pair_cost_fn(config)
+    assert fn({"comp": " ala "}, {"comp": "ALA"}) == pytest.approx(0.0)
+    assert fn({"comp": None}, {"comp": "ALA"}) == pytest.approx(1.5)
 
 
 # ---------------------------------------------------------------------------

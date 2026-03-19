@@ -5,6 +5,7 @@ Public API
 - :class:`PairCostFn` — Protocol for any callable ``(left, right) -> float``.
 - :class:`ConstraintFn` — Protocol for any callable ``(left, right) -> bool``.
 - :class:`WeightedFieldCost` — single numeric-field penalty term.
+- :class:`CategoricalFieldCost` — categorical or synonym-aware penalty term.
 - :class:`PairCostConfig` — full configuration for :func:`make_pair_cost_fn`.
 - :func:`make_pair_cost_fn` — build a :class:`PairCostFn` from a config.
 - :func:`make_nested_cost_fn` — build a :class:`PairCostFn` whose cost is the
@@ -24,7 +25,10 @@ concrete function:
 2. Each :class:`WeightedFieldCost` contributes ``weight * |f(left) - f(right)|``
    to the total.  If the absolute difference exceeds ``max_diff`` the pair
    receives ``large_cost`` instead.
-3. The sum of all soft penalties is returned when no hard stop is triggered.
+3. Each :class:`CategoricalFieldCost` contributes a configurable match,
+   mismatch, or missing-value penalty, optionally using synonym-aware
+   equivalence logic.
+4. The sum of all soft penalties is returned when no hard stop is triggered.
 
 ``make_nested_cost_fn`` computes the cost of a pair by running an inner
 matching algorithm on the sub-elements extracted from each side.  This enables
@@ -98,6 +102,42 @@ class WeightedFieldCost:
 
 
 @dataclass(frozen=True)
+class CategoricalFieldCost:
+    """A categorical penalty term with optional synonym-aware equivalence.
+
+    Parameters
+    ----------
+    field_fn:
+        Extracts the categorical value from an element.
+    mismatch_cost:
+        Penalty applied when the extracted values are both present but not
+        equivalent.
+    match_cost:
+        Penalty applied when the extracted values are equivalent. Defaults to
+        ``0.0``.
+    missing_cost:
+        Penalty applied when either extracted value is ``None``. Defaults to
+        ``0.0``.
+    normalize_fn:
+        Optional normalization applied before equivalence checks.
+    equivalent_fn:
+        Optional custom equivalence hook. When omitted, exact equality and
+        ``synonym_groups`` are used.
+    synonym_groups:
+        Optional collection of category groups that should be treated as
+        equivalent, for example ``[{"HB2", "HB3"}]``.
+    """
+
+    field_fn: Callable[[Any], object | None]
+    mismatch_cost: float
+    match_cost: float = 0.0
+    missing_cost: float = 0.0
+    normalize_fn: Callable[[object], object] | None = None
+    equivalent_fn: Callable[[object, object], bool] | None = None
+    synonym_groups: list[frozenset[object]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class PairCostConfig:
     """Full configuration for :func:`make_pair_cost_fn`.
 
@@ -107,6 +147,8 @@ class PairCostConfig:
         Hard-compatibility predicates.  Any ``False`` result → ``large_cost``.
     field_costs:
         Soft penalty terms summed to form the total cost.
+    categorical_costs:
+        Categorical penalty terms summed after numeric field costs.
     unmatched_cost:
         Cost used as the dummy-row penalty when this config is used inside a
         matching algorithm (stored here for co-location with the cost function;
@@ -118,6 +160,7 @@ class PairCostConfig:
 
     constraints: list[ConstraintFn] = field(default_factory=list)
     field_costs: list[WeightedFieldCost] = field(default_factory=list)
+    categorical_costs: list[CategoricalFieldCost] = field(default_factory=list)
     unmatched_cost: float = 0.0
     large_cost: float = 1e9
 
@@ -125,6 +168,22 @@ class PairCostConfig:
 # ---------------------------------------------------------------------------
 # Factory functions
 # ---------------------------------------------------------------------------
+
+
+def _categorical_values_equivalent(
+    left_value: object,
+    right_value: object,
+    categorical_cost: CategoricalFieldCost,
+) -> bool:
+    """Return True when two categorical values should be treated as equivalent."""
+    if categorical_cost.equivalent_fn is not None:
+        return categorical_cost.equivalent_fn(left_value, right_value)
+    if left_value == right_value:
+        return True
+    return any(
+        left_value in synonym_group and right_value in synonym_group
+        for synonym_group in categorical_cost.synonym_groups
+    )
 
 
 def make_pair_cost_fn(config: PairCostConfig) -> PairCostFn:
@@ -157,6 +216,20 @@ def make_pair_cost_fn(config: PairCostConfig) -> PairCostFn:
             if wfc.max_diff is not None and diff > wfc.max_diff:
                 return config.large_cost
             total += wfc.weight * diff
+
+        for categorical_cost in config.categorical_costs:
+            left_value = categorical_cost.field_fn(left)
+            right_value = categorical_cost.field_fn(right)
+            if left_value is None or right_value is None:
+                total += categorical_cost.missing_cost
+                continue
+            if categorical_cost.normalize_fn is not None:
+                left_value = categorical_cost.normalize_fn(left_value)
+                right_value = categorical_cost.normalize_fn(right_value)
+            if _categorical_values_equivalent(left_value, right_value, categorical_cost):
+                total += categorical_cost.match_cost
+            else:
+                total += categorical_cost.mismatch_cost
 
         return total
 
