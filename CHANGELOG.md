@@ -32,6 +32,25 @@ Items should be categorized under these headings:
 
 ### Security
 
+## [0.2.1] - 2026-04-02
+
+### Added
+
+### Changed
+- clarify retained suppression directives with explicit rationale across score,
+  canonicalize, and contract/unit tests so generic typing boundaries and
+  intentional negative-test violations are documented inline
+
+### Deprecated
+
+### Removed
+- remove an unnecessary `# noqa: E731` by replacing a lambda in unit tests with
+  a named local function
+
+### Fixed
+
+### Security
+
 ## [0.2.0] - 2026-03-19
 
 ### Added

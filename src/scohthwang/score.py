@@ -63,7 +63,7 @@ if TYPE_CHECKING:
 class PairCostFn(Protocol):
     """Callable that returns the cost of pairing two elements."""
 
-    def __call__(self, left: Any, right: Any) -> float:  # noqa: ANN401
+    def __call__(self, left: Any, right: Any) -> float:  # noqa: ANN401 - protocol must remain generic across caller-defined element types.
         """Return non-negative cost; higher means less compatible."""
         ...
 
@@ -71,7 +71,7 @@ class PairCostFn(Protocol):
 class ConstraintFn(Protocol):
     """Callable that returns ``True`` when a pair is *allowed*."""
 
-    def __call__(self, left: Any, right: Any) -> bool:  # noqa: ANN401
+    def __call__(self, left: Any, right: Any) -> bool:  # noqa: ANN401 - protocol must remain generic across caller-defined element types.
         """Return ``False`` to mark the pair as hard-incompatible."""
         ...
 
@@ -205,7 +205,7 @@ def make_pair_cost_fn(config: PairCostConfig) -> PairCostFn:
         A closure over ``config`` that computes the pair cost.
     """
 
-    def pair_cost(left: Any, right: Any) -> float:  # noqa: ANN401
+    def pair_cost(left: Any, right: Any) -> float:  # noqa: ANN401 - closure implements PairCostFn for arbitrary caller element shapes.
         for constraint in config.constraints:
             if not constraint(left, right):
                 return config.large_cost
@@ -268,7 +268,7 @@ def make_nested_cost_fn(
         A closure that returns ``inner_match_fn(...).total_cost``.
     """
 
-    def nested_cost(left: Any, right: Any) -> float:  # noqa: ANN401
+    def nested_cost(left: Any, right: Any) -> float:  # noqa: ANN401 - nested matcher accepts arbitrary caller element/container types.
         result = inner_match_fn(left_items_fn(left), right_items_fn(right), unmatched_cost)
         return result.total_cost
 

@@ -1,5 +1,12 @@
 # TODO
 
+## Current short-horizon tasks
+
+- No active short-horizon tasks remain after the suppression-directive hygiene
+  pass and patch release metadata update.
+- Record the next active implementation slice here when work moves beyond
+  maintenance/documentation updates.
+
 ## ~~Phase 1 — Core models (`src/scohthwang/models.py`)~~ ✓ complete
 
 ## ~~Phase 2 — Assignment (`src/scohthwang/assign.py`)~~ ✓ complete

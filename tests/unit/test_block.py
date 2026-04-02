@@ -330,7 +330,7 @@ def test_compose_empty_raises() -> None:
 def test_compose_invalid_mode_raises() -> None:
     fn = key_equality_block(lambda x: x)
     with pytest.raises(ValueError, match="mode"):
-        compose_blocks(fn, mode="invalid")  # type: ignore[arg-type]
+        compose_blocks(fn, mode="invalid")  # type: ignore[arg-type]  # intentional invalid literal to assert runtime validation path.
 
 
 # ---------------------------------------------------------------------------

@@ -144,7 +144,7 @@ def make_canonicalizer(rules: list[CanonicalizeRule]) -> Callable[[T], T]:
                     break
         if not updates:
             return obj
-        return dataclasses.replace(obj, **updates)  # type: ignore[type-var]
+        return dataclasses.replace(obj, **updates)  # type: ignore[type-var]  # dataclasses.replace preserves runtime type of obj, but type checker cannot prove it for generic T.
 
     return _canonicalize
 

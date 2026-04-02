@@ -212,7 +212,9 @@ def test_match_block_fn_avoids_wrong_pairs() -> None:
 def test_group_and_match_same_keys() -> None:
     left = [("A", 1.0), ("B", 2.0), ("A", 3.0)]
     right = [("A", 1.5), ("B", 2.5)]
-    cost_fn = lambda left_item, right_item: abs(left_item[1] - right_item[1])  # noqa: E731
+
+    def cost_fn(left_item: tuple[str, float], right_item: tuple[str, float]) -> float:
+        return abs(left_item[1] - right_item[1])
 
     results = group_and_match(
         left,
