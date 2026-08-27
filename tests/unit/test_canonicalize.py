@@ -42,8 +42,9 @@ class NumRecord:
 @pytest.mark.small
 def test_canonicalize_rule_is_frozen() -> None:
     rule = CanonicalizeRule("name", ["auth_name"])
-    with pytest.raises((dataclasses.FrozenInstanceError, AttributeError)):
-        rule.field_name = "other"  # type: ignore[misc]  # intentional mutation attempt to verify frozen rule semantics.
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        rule.field_name = "other"  # ty: ignore[invalid-assignment]  # intentional mutation attempt to verify frozen rule semantics.
 
 
 @pytest.mark.unit

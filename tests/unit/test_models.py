@@ -82,7 +82,7 @@ def test_match_result_construction() -> None:
 def test_match_result_is_frozen() -> None:
     result = MatchResult(pairs=[], unmatched_left=[], unmatched_right=[], total_cost=0.0)
     with pytest.raises(dataclasses.FrozenInstanceError):
-        result.total_cost = 1.0  # type: ignore[misc]  # intentional mutation attempt to verify frozen dataclass enforcement.
+        result.total_cost = 1.0  # ty: ignore[invalid-assignment]  # intentional mutation attempt to verify frozen dataclass enforcement.
 
 
 @pytest.mark.unit
@@ -142,9 +142,10 @@ def test_offset_inference_result_none_offset() -> None:
 @pytest.mark.unit
 @pytest.mark.small
 def test_offset_inference_result_is_frozen() -> None:
-    result = OffsetInferenceResult(offset=0, agreement=1.0, compared=5, ambiguous=False)
+    result = OffsetInferenceResult(offset=0, agreement=1.0, compared=2, ambiguous=False)
+
     with pytest.raises(dataclasses.FrozenInstanceError):
-        result.offset = 1  # type: ignore[misc]  # intentional mutation attempt to verify frozen dataclass enforcement.
+        result.offset = 1  # ty: ignore[invalid-assignment]  # intentional mutation attempt to verify frozen dataclass enforcement.
 
 
 @pytest.mark.unit

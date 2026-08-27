@@ -144,7 +144,7 @@ def make_canonicalizer(rules: list[CanonicalizeRule]) -> Callable[[T], T]:
                     break
         if not updates:
             return obj
-        return dataclasses.replace(obj, **updates)  # type: ignore[type-var]  # dataclasses.replace preserves runtime type of obj, but type checker cannot prove it for generic T.
+        return dataclasses.replace(obj, **updates)  # ty: ignore[invalid-argument-type]  # dataclasses.replace preserves the runtime type of a dataclass instance, but T cannot express the stdlib's private DataclassInstance bound.
 
     return _canonicalize
 
