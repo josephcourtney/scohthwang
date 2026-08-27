@@ -129,7 +129,6 @@
     ".uv",
     ".cache",
   ]
-  asyncio_mode = "auto"
 
   filterwarnings = [
     "error::DeprecationWarning:showcov\\.",
