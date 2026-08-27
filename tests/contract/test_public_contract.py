@@ -64,5 +64,5 @@ def test_offset_inference_returns_none_when_all_candidates_have_zero_support() -
 @pytest.mark.small
 def test_star_import_matches_module_all() -> None:
     namespace: dict[str, object] = {}
-    exec("from scohthwang import *", {}, namespace)  # noqa: S102 - this test explicitly verifies the package's star-import public contract.
+    exec("from scohthwang import *", {}, namespace)  # ruff: ignore[exec-builtin] - this test explicitly verifies the package's star-import public contract.
     assert set(namespace) == set(scohthwang.__all__)

@@ -10,7 +10,9 @@ importable directly for cases where finer-grained imports are preferred.
 
 from __future__ import annotations
 
-__version__ = "0.2.1"
+from importlib.metadata import version
+
+__version__ = version("scohthwang")
 
 # models
 # align
@@ -95,6 +97,7 @@ __all__ = [
     "PairCostConfig",
     "PairCostFn",
     "WeightedFieldCost",
+    "__version__",
     "all_pairs",
     "compose_blocks",
     "group_and_match",

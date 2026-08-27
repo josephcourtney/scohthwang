@@ -8,7 +8,8 @@
     { name = "Joseph M Courtney", email = "5942706+josephcourtney@users.noreply.github.com" },
   ]
   urls = { "Homepage" = "https://github.com/josephcourtney/scohthwang", "Bug Tracker" = "https://github.com/josephcourtney/scohthwang/issues" }
-  license = { text = "GPL-3.0-only" }
+  license = "GPL-3.0-only"
+  license-files = ["LICENSE.md"]
   classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: GNU General Public License (GPL)",

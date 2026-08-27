@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import subprocess  # noqa: S404 - packaging contract tests intentionally execute local build/install commands.
+import subprocess  # ruff: ignore[suspicious-subprocess-import] - packaging contract tests intentionally execute local build/install commands.
 import sys
 from pathlib import Path
 
@@ -19,7 +19,7 @@ def _run(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command and capture text output for assertions."""
-    return subprocess.run(  # noqa: S603 - test passes explicit argv list and does not invoke a shell.
+    return subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] - test passes explicit argv list and does not invoke a shell.
         cmd,
         cwd=cwd,
         check=True,
