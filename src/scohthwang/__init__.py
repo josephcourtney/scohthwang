@@ -10,7 +10,7 @@ importable directly for cases where finer-grained imports are preferred.
 
 from __future__ import annotations
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 # models
 # align
