@@ -2,7 +2,7 @@
 [project]
   name = "scohthwang"
   version = "0.2.1"
-  description = "mirror"
+  description = "Composable algorithms for bipartite correspondence finding"
   readme = "README.md"
   authors = [
     { name = "Joseph M Courtney", email = "5942706+josephcourtney@users.noreply.github.com" },

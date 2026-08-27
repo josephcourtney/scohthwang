@@ -113,4 +113,12 @@ To run the validation suite:
 
 ## Project Status
 
-Alpha — `0.2.0`. The module structure is in place; implementations are being extracted and generalized from working domain-specific code in `bvp/packages/bvp-cs`. See `DESIGN.md` for the intended architecture and `PLAN.md` for implementation sequencing.
+Alpha — `0.2.1`.
+
+The core matching, assignment, alignment, blocking, scoring, and
+canonicalization APIs are implemented and tested. The package was extracted
+and generalized from correspondence logic originally developed for BVP and is
+now maintained as an independent support library.
+
+The public API should be usable by downstream packages, but the project remains
+pre-1.0 and may make incompatible API changes as additional use cases emerge.
